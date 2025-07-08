@@ -39,26 +39,28 @@ class Controller:
         self.axes.axis("on")
 
     def _draw_box(self, class_name, class_data, x, y, box_width, box_height, edge_color="black", face_color="#e6f2ff"):
-        individual_box_height = box_height
         class_data["pos"] = (x,y)
-        if box_height -0.375 +len(class_data["attrs"]) * self.FONTSIZE * 0.02 > individual_box_height:
-            individual_box_height = box_height +len(class_data["attrs"]) * self.FONTSIZE * 0.02
-            class_data["height"] = individual_box_height
-        #print(f"box_height: {individual_box_height}, class name: {class_name}")
+        if box_height -0.375 +len(class_data["attrs"]) * self.FONTSIZE * 0.02 > box_height:
+            box_height = box_height +len(class_data["attrs"]) * self.FONTSIZE * 0.02
+            class_data["height"] = box_height
+            
+        box_width = max(max(self.larger_string_size_list(class_data["attrs"]), len(class_name)) * self.FONTSIZE * 0.0035, self.BOX_WIDTH_DEFAULT)
+        class_data["width"] = box_width
+        #print(f"box_height: {box_height}, class name: {class_name}")
             
         # Caixa da classe
         self.axes.add_patch(FancyBboxPatch(
-            (x, y), box_width, individual_box_height,
+            (x, y), box_width, box_height,
             boxstyle="round,pad=0.05", edgecolor=edge_color, facecolor=face_color
         ))
 
         #título    
-        local_title_y = y + individual_box_height - 0.2
+        local_title_y = y + box_height - 0.2
         self.axes.text(x + 0.05, local_title_y, class_name, fontsize=self.FONTSIZE, weight="bold", va="top")
         
         #dados
         for i, attr in enumerate(class_data["attrs"]):
-            self.axes.text(x + 0.05, y +individual_box_height -0.5 - self.FONTSIZE * 0.02 * i, attr, fontsize=8, va="top")
+            self.axes.text(x + 0.05, y +box_height -0.5 - self.FONTSIZE * 0.02 * i, attr, fontsize=8, va="top")
 
     def _draw_box_recursively(self, count, depth, subclasses, sides, box_width, box_height, edge_color="black", face_color="#e6f2ff"):
         if count != sides:
@@ -73,15 +75,30 @@ class Controller:
             return
         
 
-    def _draw_relationship(self, child, parent, classes, box_width, box_height):
+    def _draw_relationship(self, child, parent, classes):
         # Desenha relacionamentos com setas da TABELA FILHA para a PAI
         x1, y1 = self.classes[child]["pos"]
         x2, y2 = self.classes[parent]["pos"]
+        box_width_child = classes[child]["width"]
+        box_height_child = classes[child]["height"]
+        box_width_parent = classes[parent]["width"]
+        box_height_parent = classes[parent]["height"]
+        child_sin = self.angle_radius_sin_optimized(self.classes[child]["angle"])
+        child_cos = self.angle_radius_cos_optimized(self.classes[child]["angle"])
+        parent_sin = self.angle_radius_sin_optimized(self.classes[parent]["angle"])
+        parent_cos = self.angle_radius_cos_optimized(self.classes[parent]["angle"])
+        child_x = x1+(((box_width_child if child_sin != 0 else (box_width_child/2)) if child_sin >= 0 else 0) if child_cos != 0 else (box_width_child if child_sin < 0 else 0))
+        child_y = y1+(((box_height_child if child_cos != 0 else (box_height_child/2)) if child_cos <= 0 else 0) if child_sin >= 0 else box_height_child/2)
+        parent_x = x2+(((box_width_parent if parent_sin != 0 else (box_width_parent/2)) if parent_sin >= 0 else 0) if parent_cos != 0 else (box_width_child if parent_sin < 0 else 0))
+        parent_y = y2+(((box_height_parent if parent_cos != 0 else(box_height_parent/2)) if parent_cos <= 0 else 0) if parent_sin >= 0 else box_height_parent/2)
         print(f"parent {parent} angle:{self.classes[parent]["angle"]}, sin: {self.angle_radius_sin_optimized(self.classes[parent]["angle"])}, cos: {self.angle_radius_cos_optimized(self.classes[parent]["angle"])}, x: {x2}, y: {y2}, child {child} angle: {self.classes[child]["angle"]}, sin: {self.angle_radius_sin_optimized(self.classes[child]["angle"])}, cos: {self.angle_radius_cos_optimized(self.classes[child]["angle"])}, x: {x1}, y: {y1}")
-        
+        print(f"child x,y: {(child_x, child_y)}, box_width_child: {box_width_child}, box_height_child: {box_height_child}")
+        print(f"parent x, y: {(parent_x, parent_y)}, box_width_parent: {box_width_parent}, box_height_parent: {box_height_parent}")
         arrow = FancyArrowPatch(
-            (x1 + box_width*self.angle_radius_cos_optimized(self.classes[child]["angle"]) +self.angle_radius_cos_optimized(self.classes[child]["angle"]), y1 + box_height*self.angle_radius_sin_optimized(self.classes[child]["angle"])+self.angle_radius_sin_optimized(self.classes[child]["angle"])),
-            (x2 + box_width*self.angle_radius_cos_optimized(self.classes[parent]["angle"]) +self.angle_radius_cos_optimized(self.classes[parent]["angle"]), y2 + box_height*self.angle_radius_sin_optimized(self.classes[parent]["angle"]) +self.angle_radius_sin_optimized(self.classes[parent]["angle"])),
+            #(x1 + box_width_child*self.angle_radius_cos_optimized(self.classes[child]["angle"]) +self.angle_radius_sin_optimized(self.classes[child]["angle"]), y1 + box_height_child*self.angle_radius_sin_optimized(self.classes[child]["angle"])+self.angle_radius_cos_optimized(self.classes[child]["angle"])),
+            #(x2 + box_width_parent*self.angle_radius_cos_optimized(self.classes[parent]["angle"]) +self.angle_radius_sin_optimized(self.classes[parent]["angle"]), y2 + box_height_parent*self.angle_radius_sin_optimized(self.classes[parent]["angle"]) +self.angle_radius_cos_optimized(self.classes[parent]["angle"])),
+            (child_x,child_y),
+            (parent_x,parent_y),
             arrowstyle="-|>", mutation_scale=15,
             color="black", linewidth=1.2
         )
@@ -119,7 +136,7 @@ class Controller:
     # Desenha as classes
     def draw_classes(self):
         count = 0
-        depth = self.calculate_greater_area(self.classes)
+        depth = self.calculate_greater_area(self.classes)*0.5
         position_left = 0
         position_right = self.SIDES
         continue_draw = True
@@ -139,7 +156,7 @@ class Controller:
                 continue_flag = False
             
         for child, parent in self.relationships:
-             self._draw_relationship(child, parent, classes, self.BOX_WIDTH_DEFAULT, self.BOX_HEIGHT_DEFAULT)
+             self._draw_relationship(child, parent, classes)
         plt.tight_layout()
         plt.show()
 
