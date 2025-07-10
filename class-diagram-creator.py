@@ -91,17 +91,6 @@ class Controller:
         box_width_parent = classes[parent]["width"]
         box_height_parent = classes[parent]["height"]
         
-        #child_sin = self.angle_radius_sin_optimized(self.classes[child]["angle"])
-        #child_cos = self.angle_radius_cos_optimized(self.classes[child]["angle"])
-        #parent_sin = self.angle_radius_sin_optimized(self.classes[parent]["angle"])
-        #parent_cos = self.angle_radius_cos_optimized(self.classes[parent]["angle"])
-        
-        
-        #child_x = x1+(((box_width_child if child_sin != 0 else (box_width_child/2)) if child_sin >= 0 else 0) if child_cos != 0 else (box_width_child if child_sin < 0 else 0))
-        #child_y = y1+(((box_height_child if child_cos != 0 else (box_height_child/2)) if child_cos <= 0 else 0) if child_sin >= 0 else box_height_child/2)
-        #parent_x = x2+(((box_width_parent if parent_sin != 0 else (box_width_parent/2)) if parent_sin >= 0 else 0) if parent_cos != 0 else (box_width_child if parent_sin < 0 else 0))
-        #parent_y = y2+(((box_height_parent if parent_cos != 0 else(box_height_parent/2)) if parent_cos <= 0 else 0) if parent_sin >= 0 else box_height_parent/2)
-        
         center = dict()
         for element_type in ['child', 'parent']:
             center[element_type] = dict()
@@ -113,11 +102,6 @@ class Controller:
                
         angle = atan2(center['parent']['y']-center['child']['y'],center['parent']['x']-center['child']['x'])
         
-        #child_sin = self.angle_radius_sin_optimized(angle)
-        #hild_cos = self.angle_radius_cos_optimized(angle)
-        #parent_sin = self.angle_radius_sin_optimized(angle)
-        #parent_cos = self.angle_radius_cos_optimized(angle)
-        
         child_sin = sin(angle)
         child_cos = cos(angle)
         parent_sin = -sin(angle)
@@ -128,12 +112,10 @@ class Controller:
         parent_x = center['parent']['x']+parent_cos*box_width_parent/2
         parent_y = center['parent']['y']+parent_sin*box_height_parent/2
         
-        print(f"child {child} angle: {angle}, sin: {child_sin}, cos: {child_cos}, x: {x1}, y: {y1}\nchild x,y: {(child_x, child_y)}, box_width_child: {box_width_child}, box_height_child: {box_height_child}")
-        print(f"parent {parent} angle:{angle}, sin: {parent_sin}, cos: {parent_cos}, x: {x2}, y: {y2},\nparent x, y: {(parent_x, parent_y)}, box_width_parent: {box_width_parent}, box_height_parent: {box_height_parent}")
-        print(f"")
+        #print(f"child {child} angle: {angle}, sin: {child_sin}, cos: {child_cos}, x: {x1}, y: {y1}\nchild x,y: {(child_x, child_y)}, box_width_child: {box_width_child}, box_height_child: {box_height_child}")
+        #print(f"parent {parent} angle:{angle}, sin: {parent_sin}, cos: {parent_cos}, x: {x2}, y: {y2},\nparent x, y: {(parent_x, parent_y)}, box_width_parent: {box_width_parent}, box_height_parent: {box_height_parent}")
+        
         arrow = FancyArrowPatch(
-            #(x1 + box_width_child*self.angle_radius_cos_optimized(self.classes[child]["angle"]) +self.angle_radius_sin_optimized(self.classes[child]["angle"]), y1 + box_height_child*self.angle_radius_sin_optimized(self.classes[child]["angle"])+self.angle_radius_cos_optimized(self.classes[child]["angle"])),
-            #(x2 + box_width_parent*self.angle_radius_cos_optimized(self.classes[parent]["angle"]) +self.angle_radius_sin_optimized(self.classes[parent]["angle"]), y2 + box_height_parent*self.angle_radius_sin_optimized(self.classes[parent]["angle"]) +self.angle_radius_cos_optimized(self.classes[parent]["angle"])),
             (child_x,child_y),
             (parent_x,parent_y),
             arrowstyle="-|>", mutation_scale=15,
