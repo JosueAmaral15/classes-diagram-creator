@@ -9,10 +9,7 @@ from math import sin, cos, floor, pi, atan2, isinf
 from tqdm import tqdm
 from statistics import harmonic_mean, geometric_mean
 
-def media_harmonica(valores):
-    n = len(valores)
-    return n / sum(1 / x for x in valores)
-
+PRINT_CLASS_NAMES = True
 
 class GraphicDrawing:
     
@@ -50,6 +47,8 @@ class GraphicDrawing:
         count=0
         self.greater_width = 0
         self.greater_height = 0
+        if PRINT_CLASS_NAMES:
+            print("\nFound following class names: ")
         for class_name, class_attributes in self.classes.items():
             class_attributes["width"] = max(max(self.larger_string_size_list(class_attributes["attrs"]) * self.FONTSIZE * 0.004, len(class_name)* self.FONTSIZETITLE * 0.004), self.BOX_WIDTH_DEFAULT)
             class_attributes["height"] = max(self.BOX_HEIGHT_DEFAULT +len(class_attributes["attrs"]) * self.FONTSIZE * 0.025,self.BOX_HEIGHT_DEFAULT)
@@ -63,12 +62,17 @@ class GraphicDrawing:
             self.text[class_name]['width'] = class_attributes["width"]
             self.text[class_name]['height'] = class_attributes["height"]
             self.text[class_name]['box'] = None
+            if PRINT_CLASS_NAMES:
+                print(f"{class_name}")
             
             if class_attributes["width"] > self.greater_width:
                 self.greater_width = class_attributes["width"]
             
             if class_attributes["height"] > self.greater_height:
                 self.greater_height = class_attributes["height"]
+                
+        if PRINT_CLASS_NAMES:
+            print("\n")
             
         self.total_length = len(self.classes)
         self.MAXIMUM = 100
