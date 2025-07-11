@@ -6,7 +6,8 @@ import matplotlib.lines as mlines
 from math import sin, cos, floor, pi, atan2, isinf
 from tqdm import tqdm
 
-class Controller:
+class GraphicDrawing:
+    
     def __init__(self, classes = None, relationships = None, sides = 4, limit_classes = float("inf"), limit_relationships = float("inf")):
         
         #constants
@@ -25,17 +26,76 @@ class Controller:
         self.classes = classes
         self.relationships = relationships
         self.pbar = None
+        self.text = dict()
+        self.text['title'] = list()
+        self.text['data'] = list()
         
         #numbers
         self.limit_classes = limit_classes
         self.limit_relationships = limit_relationships
         self.sides = sides
         
-        fig, self.axes = plt.subplots(figsize=(12, 6))
+        #Initialize instance variables
+        count=0
+        for classes_name, class_data in self.classes.items():
+            class_data["width"] = max(max(self.larger_string_size_list(class_data["attrs"]) * self.FONTSIZE * 0.004, len(classes_name)* self.FONTSIZETITLE * 0.004), self.BOX_WIDTH_DEFAULT)
+            class_data["height"] = max(self.BOX_HEIGHT_DEFAULT +len(class_data["attrs"]) * self.FONTSIZE * 0.025,self.BOX_HEIGHT_DEFAULT)
+            class_data["angle"] = count*(360//self.sides)
+            count+=1
+        
+        count=0
+        count2 = 0
+        depth = self.calculate_greater_area(self.classes)
+        depth2 = depth
+        for classes_name, class_data in self.classes.items():
+            x,y = self.angle_radius_sin_optimized(class_data["angle"]+((180//self.sides) if (count//self.sides % 2) else 0))*depth, self.angle_radius_cos_optimized(class_data["angle"]+((180//self.sides) if (count//self.sides % 2) else 0))*depth
+            class_data["pos"] = (x,y)
+            print(f"depth: {depth} depth2: {depth2}")
+            if (count+1) % self.sides*2 == 0:
+                try:
+                    count2+=2
+                    depth = depth2*(count2+1)
+                except:
+                    pass
+            count+=1
+            
+        self.total_length = len(self.classes)
+        self.MAXIMUM = 100
+        
+        self.fig, self.axes = plt.subplots(figsize=(12, 6))
+        self.base_xlim = self.axes.get_xlim()
+        self.base_ylim = self.axes.get_ylim()
+        self.axes.callbacks.connect("xlim_changed", self.update_text_fontsize)
+        self.axes.callbacks.connect("ylim_changed", self.update_text_fontsize)
         self.axes.set_xlim(-3, 10)
         self.axes.set_ylim(-3, 8)
         self.axes.axis("on")
+    
+    def update_text_fontsize(self, event):
+        # Obtém limites atuais do eixo
+        cur_xlim = self.axes.get_xlim()
+        cur_ylim = self.axes.get_ylim()
 
+        # Calcula escala atual em relação aos limites base
+        scale_x = abs((self.base_xlim[1] - self.base_xlim[0]) / (cur_xlim[1] - cur_xlim[0]))
+        scale_y = abs((self.base_ylim[1] - self.base_ylim[0]) / (cur_ylim[1] - cur_ylim[0]))
+
+        # Usa a menor escala para manter proporção visual
+        scale = max(scale_x, scale_y)*8
+        print(f"scale_x: {scale_x}, scale_y: {scale_y}, scale: {scale}")
+
+        # Atualiza o tamanho da fonte
+        for text_title in self.text['title']:
+            text_title.set_fontsize(self.FONTSIZE * scale)
+            print("T1")
+            
+        for text_data in self.text['data']:
+            text_data.set_fontsize(self.FONTSIZETITLE * scale)
+            print("T2")
+
+        # Redesenha
+        self.fig.canvas.draw_idle()
+    
     def _draw_box(self, class_name, class_data, x, y, box_width, box_height, edge_color="black", face_color="#e6f2ff"):
         
         # Caixa da classe
@@ -46,11 +106,12 @@ class Controller:
 
         #título    
         local_title_y = y + box_height - 0.2
-        self.axes.text(x + 0.05, local_title_y, class_name, fontsize=self.FONTSIZETITLE, weight="bold", va="top")
-        
+        text_title = self.axes.text(x + 0.05, local_title_y, class_name, fontsize=self.FONTSIZETITLE, weight="bold", va="top")
+        self.text['title'].append(text_title)
         #dados
         for i, attr in enumerate(class_data["attrs"]):
-            self.axes.text(x + 0.05, y +box_height -0.5 - self.FONTSIZETITLE * 0.02 * i, attr, fontsize=self.FONTSIZE, va="top")
+            text_data = self.axes.text(x + 0.05, y +box_height -0.5 - self.FONTSIZETITLE * 0.02 * i, attr, fontsize=self.FONTSIZE, va="top")
+            self.text['data'].append(text_data)
 
     def _draw_box_recursively(self, count, subclasses, sides, box_width, box_height, edge_color="black", face_color="#e6f2ff"):
         if count != sides:
@@ -126,7 +187,7 @@ class Controller:
     def calculate_greater_area(self, classes):
         max_size = 0
         for class_name, class_data in classes.items():
-            area = class_data["width"] * class_data["height"]
+            area = (class_data["width"] + class_data["height"])/2
             #print(f"classname: {class_name}, width: {width}, height: {height}, area: {area}")
             if area > max_size:
                 max_size = area
@@ -134,42 +195,17 @@ class Controller:
     
     # Desenha as classes
     def draw_classes(self): 
-        count=0
-        for classes_name, class_data in self.classes.items():
-            class_data["width"] = max(max(self.larger_string_size_list(class_data["attrs"]) * self.FONTSIZE * 0.004, len(classes_name)* self.FONTSIZETITLE * 0.004), self.BOX_WIDTH_DEFAULT)
-            class_data["height"] = max(self.BOX_HEIGHT_DEFAULT +len(class_data["attrs"]) * self.FONTSIZE * 0.025,self.BOX_HEIGHT_DEFAULT)
-            class_data["angle"] = count*(360//self.sides)
-            count+=1
-        
-        count=0
-        count2 = 0
-        depth = self.calculate_greater_area(self.classes)*0.5
-        depth2 = depth
-        for classes_name, class_data in self.classes.items():
-            x,y = self.angle_radius_sin_optimized(class_data["angle"])*depth, self.angle_radius_cos_optimized(class_data["angle"])*depth
-            class_data["pos"] = (x,y)
-            print(f"depth: {depth} depth2: {depth2}")
-            if (count+1) % self.sides == 0:
-                try:
-                    count2+=2
-                    depth = depth2*(count2+1)
-                except:
-                    pass
-            count+=1
-            
-        total_length = len(self.classes)
-        MAXIMUM = 100
-        pbar = tqdm(total=MAXIMUM, desc="Process for draw classes")
+        pbar = tqdm(total=self.MAXIMUM, desc="Process for draw classes")
         count = 0
         position_left = 0
         position_right = self.sides
         continue_draw = True
         continue_flag = continue_draw
-        incrementation = (self.sides/total_length)*MAXIMUM
+        incrementation = (self.sides/self.total_length)*self.MAXIMUM
         total_incrementation = 0
-        if total_incrementation + incrementation > MAXIMUM:
-            incrementation = MAXIMUM -total_incrementation
-            if total_incrementation + incrementation > MAXIMUM:
+        if total_incrementation + incrementation > self.MAXIMUM:
+            incrementation = self.MAXIMUM -total_incrementation
+            if total_incrementation + incrementation > self.MAXIMUM:
                 incrementation = 0
         
         total_incrementation += incrementation
@@ -177,9 +213,9 @@ class Controller:
         pbar.update(incrementation)
         while continue_draw:
             #print("DEBUG 184",incrementation, total_incrementation, total_incrementation + incrementation)
-            if total_incrementation + incrementation > MAXIMUM:
-                incrementation = MAXIMUM -total_incrementation
-                if total_incrementation + incrementation > MAXIMUM:
+            if total_incrementation + incrementation > self.MAXIMUM:
+                incrementation = self.MAXIMUM -total_incrementation
+                if total_incrementation + incrementation > self.MAXIMUM:
                     incrementation = 0
             
             total_incrementation += incrementation
@@ -192,24 +228,24 @@ class Controller:
                 self._draw_box_recursively(0, subclasses, self.sides, self.BOX_WIDTH_DEFAULT, self.BOX_HEIGHT_DEFAULT)
                 position_left = position_right
                 position_right = self.sides * (count+1) * 2
-                #print(f"position_right: {position_right}, total_length: {total_length}")
+                #print(f"position_right: {position_right}, self.total_length: {self.total_length}")
                 count+=1
-                if position_right >= total_length:
-                    position_right = total_length
+                if position_right >= self.total_length:
+                    position_right = self.total_length
                     continue_flag = False
             else:
-                incrementation = MAXIMUM -total_incrementation
+                incrementation = self.MAXIMUM -total_incrementation
                 pbar.update(incrementation)
                 break
         
         pbar = None
-        pbar = tqdm(total=MAXIMUM, desc="Process for draw relationships")
+        pbar = tqdm(total=self.MAXIMUM, desc="Process for draw relationships")
         relationships_quantity = len(self.relationships)
-        incrementation = (1/relationships_quantity)*MAXIMUM
+        incrementation = (1/relationships_quantity)*self.MAXIMUM
         total_incrementation = 0
-        if total_incrementation + incrementation > MAXIMUM:
-            incrementation = MAXIMUM -total_incrementation
-            if total_incrementation + incrementation > MAXIMUM:
+        if total_incrementation + incrementation > self.MAXIMUM:
+            incrementation = self.MAXIMUM -total_incrementation
+            if total_incrementation + incrementation > self.MAXIMUM:
                 incrementation = 0
         total_incrementation += incrementation
         pbar.update(incrementation)
@@ -217,9 +253,9 @@ class Controller:
         count = 0
         for child, parent in self.relationships:
             #print("line 221", child)
-            if total_incrementation + incrementation > MAXIMUM:
-                incrementation = MAXIMUM -total_incrementation
-                if total_incrementation + incrementation > MAXIMUM:
+            if total_incrementation + incrementation > self.MAXIMUM:
+                incrementation = self.MAXIMUM -total_incrementation
+                if total_incrementation + incrementation > self.MAXIMUM:
                     incrementation = 0
             total_incrementation += incrementation
             
@@ -228,7 +264,7 @@ class Controller:
                 #print("line 229", child)
                 self._draw_relationship(child, parent, classes)
             else:
-                incrementation = MAXIMUM -total_incrementation
+                incrementation = self.MAXIMUM -total_incrementation
                 pbar.update(incrementation)
                 break
                 
@@ -236,12 +272,20 @@ class Controller:
                 
         plt.tight_layout()
         plt.show()
-
+        
+class Controller:
+    
     @staticmethod
     def get_content():
-        name = input("Digite o nome do arquivo com o esquema: ")
-        with open(name) as file:
-            content = file.read()
+        validated = False
+        while not validated:
+            try:
+                name = input("Digite o nome do arquivo com o esquema: ")
+                with open(name) as file:
+                    content = file.read()
+                validated = True
+            except:
+                print("Erro na tentativa de ler o arquivo. Tente novamente!")
         return content
 
     @staticmethod
@@ -360,16 +404,16 @@ if __name__ == "__main__":
     TYPE = 'model'
     choice = input("Class Diagram Creator\n\nChoose an option:\n\n\t1.Create my own class diagram.\n\t2. Create a example.\n\noption: ")
     controller = None
+    drawing = None
     if choice == '1':
-        controller = Controller(classes = None, relationships = None, sides = 4, limit_classes = 10, limit_relationships = 10)
+        controller = Controller()
         content = controller.get_content()
         content = controller.get_scope_type(content, TYPE)
         classes = controller.convert_tables_to_JSON(content, TYPE)
         relationships = controller.identify_relationships(classes)
-        controller.classes = classes
-        controller.relationships = relationships
+        drawing = GraphicDrawing(classes, relationships, sides = 4, limit_classes = 10, limit_relationships = 10)
     else:
-        controller = Controller(classes, relationships)
+        drawing = GraphicDrawing(classes, relationships)
         
-    if controller is not None:
-        controller.draw_classes()
+    if drawing is not None:
+        drawing.draw_classes()
