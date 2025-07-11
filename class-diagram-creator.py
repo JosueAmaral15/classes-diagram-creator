@@ -7,13 +7,13 @@ from math import sin, cos, floor, pi, atan2, isinf
 from tqdm import tqdm
 
 class Controller:
-    def __init__(self, classes, relationships, limit_classes = float("inf"), limit_relationships = float("inf")):
+    def __init__(self, classes = None, relationships = None, sides = 4, limit_classes = float("inf"), limit_relationships = float("inf")):
         
         #constants
         self.BOX_WIDTH_DEFAULT, self.BOX_HEIGHT_DEFAULT = 1.6, 0.8
-        self.FONTSIZE = 10
-        self.SIDES = 4
-        self.CENTROID = {'x': 1, 'y': 1}
+        self.FONTSIZETITLE = 10
+        self.FONTSIZE = 8
+        
         #functions
         self.precision_function = lambda x, expoent: x * floor(0.5 * (abs(x - 10**(-expoent) + 1) - abs(x - 10**(-expoent)) + 1)) - x * floor(0.5 * (abs(x + 10**(-expoent) + 1) - abs(x + 10**(-expoent)) + 1)) + x
         self.angle_radius_sin = lambda x : sin(pi*x/180)
@@ -27,15 +27,9 @@ class Controller:
         self.pbar = None
         
         #numbers
-        self.total_length = len(self.classes)
         self.limit_classes = limit_classes
         self.limit_relationships = limit_relationships
-        
-        for classes_name in self.classes.keys():
-            self.classes[classes_name]["width"] = self.BOX_WIDTH_DEFAULT
-            self.classes[classes_name]["height"] = self.BOX_HEIGHT_DEFAULT
-            self.classes[classes_name]["angle"] = 0
-            self.classes[classes_name]["pos"] = (0,0)
+        self.sides = sides
         
         fig, self.axes = plt.subplots(figsize=(12, 6))
         self.axes.set_xlim(-3, 10)
@@ -43,16 +37,7 @@ class Controller:
         self.axes.axis("on")
 
     def _draw_box(self, class_name, class_data, x, y, box_width, box_height, edge_color="black", face_color="#e6f2ff"):
-        #print("TESTE2342")
-        class_data["pos"] = (x,y)
-        if box_height +len(class_data["attrs"]) * self.FONTSIZE * 0.02 > box_height:
-            box_height = box_height +len(class_data["attrs"]) * self.FONTSIZE * 0.02
-            class_data["height"] = box_height
-            
-        box_width = max(max(self.larger_string_size_list(class_data["attrs"]), len(class_name)) * self.FONTSIZE * 0.0035, self.BOX_WIDTH_DEFAULT)
-        class_data["width"] = box_width
-        #print(f"box_height: {box_height}, class name: {class_name}")
-            
+        
         # Caixa da classe
         self.axes.add_patch(FancyBboxPatch(
             (x, y), box_width, box_height,
@@ -61,21 +46,18 @@ class Controller:
 
         #título    
         local_title_y = y + box_height - 0.2
-        self.axes.text(x + 0.05, local_title_y, class_name, fontsize=self.FONTSIZE, weight="bold", va="top")
+        self.axes.text(x + 0.05, local_title_y, class_name, fontsize=self.FONTSIZETITLE, weight="bold", va="top")
         
         #dados
         for i, attr in enumerate(class_data["attrs"]):
-            self.axes.text(x + 0.05, y +box_height -0.5 - self.FONTSIZE * 0.02 * i, attr, fontsize=8, va="top")
+            self.axes.text(x + 0.05, y +box_height -0.5 - self.FONTSIZETITLE * 0.02 * i, attr, fontsize=self.FONTSIZE, va="top")
 
-    def _draw_box_recursively(self, count, depth, subclasses, sides, box_width, box_height, edge_color="black", face_color="#e6f2ff"):
+    def _draw_box_recursively(self, count, subclasses, sides, box_width, box_height, edge_color="black", face_color="#e6f2ff"):
         if count != sides:
-            angle = count*(360//sides)
-            x,y = self.angle_radius_sin_optimized(angle)*depth, self.angle_radius_cos_optimized(angle)*depth
             subclass = dict(list(subclasses.items())[count:count+1])
             for class_name, class_data in subclass.items():
-                class_data["angle"] = angle
-                self._draw_box(class_name, class_data, x, y, box_width, box_height, edge_color, face_color)
-            self._draw_box_recursively(count +1, depth, subclasses, sides, box_width, box_height, edge_color, face_color)
+                self._draw_box(class_name, class_data, class_data["pos"][0], class_data["pos"][1], max(class_data["width"], box_width), max(class_data["height"], box_height), edge_color, face_color)
+            self._draw_box_recursively(count +1, subclasses, sides, box_width, box_height, edge_color, face_color)
         else:
             return
         
@@ -85,7 +67,7 @@ class Controller:
         x1, y1 = self.classes[child]["pos"]
         x2, y2 = self.classes[parent]["pos"]
         
-        print(child)
+        #print("line 88", child)
         box_width_child = classes[child]["width"]
         box_height_child = classes[child]["height"]
         box_width_parent = classes[parent]["width"]
@@ -144,26 +126,46 @@ class Controller:
     def calculate_greater_area(self, classes):
         max_size = 0
         for class_name, class_data in classes.items():
-            width = max(max(self.larger_string_size_list(class_data["attrs"]), len(class_name)) * self.FONTSIZE * 0.0035, self.BOX_WIDTH_DEFAULT)
-            height = max(len(class_data["attrs"]) * self.FONTSIZE * 0.02, self.BOX_HEIGHT_DEFAULT)
-            area = width * height
+            area = class_data["width"] * class_data["height"]
             #print(f"classname: {class_name}, width: {width}, height: {height}, area: {area}")
             if area > max_size:
                 max_size = area
         return max_size
     
     # Desenha as classes
-    def draw_classes(self):
+    def draw_classes(self): 
+        count=0
+        for classes_name, class_data in self.classes.items():
+            class_data["width"] = max(max(self.larger_string_size_list(class_data["attrs"]) * self.FONTSIZE * 0.004, len(classes_name)* self.FONTSIZETITLE * 0.004), self.BOX_WIDTH_DEFAULT)
+            class_data["height"] = max(self.BOX_HEIGHT_DEFAULT +len(class_data["attrs"]) * self.FONTSIZE * 0.025,self.BOX_HEIGHT_DEFAULT)
+            class_data["angle"] = count*(360//self.sides)
+            count+=1
+        
+        count=0
+        count2 = 0
+        depth = self.calculate_greater_area(self.classes)*0.5
+        depth2 = depth
+        for classes_name, class_data in self.classes.items():
+            x,y = self.angle_radius_sin_optimized(class_data["angle"])*depth, self.angle_radius_cos_optimized(class_data["angle"])*depth
+            class_data["pos"] = (x,y)
+            print(f"depth: {depth} depth2: {depth2}")
+            if (count+1) % self.sides == 0:
+                try:
+                    count2+=2
+                    depth = depth2*(count2+1)
+                except:
+                    pass
+            count+=1
+            
+        total_length = len(self.classes)
         MAXIMUM = 100
         pbar = tqdm(total=MAXIMUM, desc="Process for draw classes")
         count = 0
-        depth = self.calculate_greater_area(self.classes)*0.5
         position_left = 0
-        position_right = self.SIDES
+        position_right = self.sides
         continue_draw = True
         continue_flag = continue_draw
-        #print(f"depth (greater area): {depth}, self.total_length: {self.total_length}")
-        incrementation = (self.SIDES/self.total_length)*MAXIMUM
+        incrementation = (self.sides/total_length)*MAXIMUM
         total_incrementation = 0
         if total_incrementation + incrementation > MAXIMUM:
             incrementation = MAXIMUM -total_incrementation
@@ -185,19 +187,15 @@ class Controller:
             pbar.update(incrementation)
             continue_draw = continue_flag
             
-            if  self.limit_classes > count*self.SIDES:
+            if  self.limit_classes > count*self.sides:
                 subclasses = dict(list(self.classes.items())[position_left:position_right])
-                self._draw_box_recursively(0, depth, subclasses, self.SIDES, self.BOX_WIDTH_DEFAULT, self.BOX_HEIGHT_DEFAULT)
+                self._draw_box_recursively(0, subclasses, self.sides, self.BOX_WIDTH_DEFAULT, self.BOX_HEIGHT_DEFAULT)
                 position_left = position_right
-                position_right = self.SIDES * (count+1) * 2
-                #print(f"position_right: {position_right}, self.total_length: {self.total_length}")
+                position_right = self.sides * (count+1) * 2
+                #print(f"position_right: {position_right}, total_length: {total_length}")
                 count+=1
-                try:
-                    depth = depth**2
-                except:
-                    pass
-                if position_right >= self.total_length:
-                    position_right = self.total_length
+                if position_right >= total_length:
+                    position_right = total_length
                     continue_flag = False
             else:
                 incrementation = MAXIMUM -total_incrementation
@@ -218,6 +216,7 @@ class Controller:
         
         count = 0
         for child, parent in self.relationships:
+            #print("line 221", child)
             if total_incrementation + incrementation > MAXIMUM:
                 incrementation = MAXIMUM -total_incrementation
                 if total_incrementation + incrementation > MAXIMUM:
@@ -226,6 +225,7 @@ class Controller:
             
             pbar.update(incrementation)
             if  self.limit_relationships > count:
+                #print("line 229", child)
                 self._draw_relationship(child, parent, classes)
             else:
                 incrementation = MAXIMUM -total_incrementation
@@ -359,10 +359,17 @@ if __name__ == "__main__":
 
     TYPE = 'model'
     choice = input("Class Diagram Creator\n\nChoose an option:\n\n\t1.Create my own class diagram.\n\t2. Create a example.\n\noption: ")
-    controller = Controller(classes, relationships, limit_classes = 10, limit_relationships = 10)
+    controller = None
     if choice == '1':
+        controller = Controller(classes = None, relationships = None, sides = 4, limit_classes = 10, limit_relationships = 10)
         content = controller.get_content()
         content = controller.get_scope_type(content, TYPE)
         classes = controller.convert_tables_to_JSON(content, TYPE)
         relationships = controller.identify_relationships(classes)
-    controller.draw_classes()
+        controller.classes = classes
+        controller.relationships = relationships
+    else:
+        controller = Controller(classes, relationships)
+        
+    if controller is not None:
+        controller.draw_classes()
