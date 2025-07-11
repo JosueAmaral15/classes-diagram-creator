@@ -2,7 +2,9 @@
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
-import matplotlib.lines as mlines
+from matplotlib.widgets import RadioButtons
+#import matplotlib.lines as mlines
+from matplotlib.widgets import TextBox
 from math import sin, cos, floor, pi, atan2, isinf
 from tqdm import tqdm
 from statistics import harmonic_mean, geometric_mean
@@ -33,11 +35,16 @@ class GraphicDrawing:
         self.relationships = relationships
         self.pbar = None
         self.text = dict()
-        
+        self.texts_found = list()
         
         #numbers
         self.limit_classes = limit_classes
         self.sides = sides
+        self.totalTextElement = 0
+        self.index_atual = 0
+        
+        #strings
+        self.valor_buscado = str()
         
         #Initialize instance variables
         count=0
@@ -67,36 +74,81 @@ class GraphicDrawing:
         self.MAXIMUM = 100
         
         self.fig, self.axes = plt.subplots(figsize=(12, 6))
+        self.fig.set_constrained_layout(True)
+        axbox = self.fig.add_axes([0.2, 0.05, 0.6, 0.075])  # [left, bottom, width, height]
+        self.text_box = TextBox(axbox, "Buscar texto:")
+        self.text_box.on_submit(self.buscar_texto)
+        axes_radio = plt.axes([0.05, 0.4, 0.2, 0.2])  # [left, bottom, width, height]
+        self.radio = RadioButtons(axes_radio, ('Palavra exata', 'Palavra Aproximada'))
+        self.radio.on_clicked(self.mudar_pesquisa)
+        self.search_function = lambda a,b: a.lower() == b.lower()
         self.base_xlim = self.axes.get_xlim()
         self.base_ylim = self.axes.get_ylim()
         self.axes.callbacks.connect("xlim_changed", self.update_dimensions)
         self.axes.callbacks.connect("ylim_changed", self.update_dimensions)
-        #print("TESTE")
+        self.fig.canvas.mpl_connect("key_press_event", self.tratar_tecla)
         self.axes.set_xlim(-3, 10)
         self.axes.set_ylim(-3, 8)
         self.axes.axis("on")
     
-    def update_dimensions(self, event):
-        #self.update_width_and_height_boxs()
-        self.update_text_fontsize()
+    def mudar_pesquisa(self, label):
+        if label == 'Palavra exata':
+            self.search_function = lambda a,b: a.lower() == b.lower()
+        elif label == 'Palavra Aproximada':
+            self.search_function = lambda a, b: a.lower() in b.lower()
         
-    # def update_width_and_height_boxs(self):
-    #     # Obtém limites atuais do eixo
-    #     cur_xlim = self.axes.get_xlim()
-    #     cur_ylim = self.axes.get_ylim()
+        if self.valor_buscado:
+            self._focar_indice()
+    
+    # Callback de busca
+    def buscar_texto(self, valor):
+        self.texts_found = list()
+        self.totalTextElement = 0
+        self.valor_buscado = valor.strip().lower()
+        found = False
+        for class_name in self.classes.keys():
+            for text in self.text[class_name]['attributes_axes_text']+[self.text[class_name]['title_axes_text']]:
+                if self.search_function(self.valor_buscado, text.get_text()):
+                    self.texts_found.append(text)
+                    if not found:
+                        found = True
+        if found:
+            self.totalTextElement = len(self.texts_found)
+            x, y = text.get_position()
+            w, h = 5, 5
+            self.axes.set_xlim(x - w/2, x + w/2)
+            self.axes.set_ylim(y - h/2, y + h/2)
+            self.fig.canvas.draw_idle()
+        else:
+            print("Texto não encontrado:", self.valor_buscado)
+    
+    def tratar_tecla(self, event):
+        #print(f"self.texts_found: {self.texts_found}, self.totalTextElement: {self.totalTextElement}")
+        if event.key == "pageup":
+            self.index_atual = (self.index_atual - 1) % self.totalTextElement
+            self._focar_indice()
+        elif event.key == "pagedown" or event.key == "enter":
+            self.index_atual = (self.index_atual + 1) % self.totalTextElement
+            self._focar_indice()
+        elif event.key == "esc":
+            self.text_box.set_val("")  # Limpa o campo
+            self.texts_found[self.index_atual].set_color("black")
+            self.fig.canvas.draw_idle()
 
-    #     # Calcula escala atual em relação aos limites base
-    #     scale_x = abs((self.base_xlim[1] - self.base_xlim[0]) / (cur_xlim[1] - cur_xlim[0]))
-    #     scale_y = abs((self.base_ylim[1] - self.base_ylim[0]) / (cur_ylim[1] - cur_ylim[0]))
-        
-    #     for class_name, class_attributes in self.classes.items():
-    #         self.text[class_name]['width'] = max(class_attributes["width"] * scale_x *7.5, class_attributes["width"]) #max(max(self.larger_string_size_list(class_attributes["attrs"]) * self.FONTSIZE * 0.004, len(class_name)* self.FONTSIZETITLE * 0.004), self.BOX_WIDTH_DEFAULT)
-    #         #self.text[class_name]['height'] = class_attributes["height"] * scale_y*7.5
-    #         if self.text[class_name]['box'] is not None:
-    #             self.text[class_name]['box'].set_width(self.text[class_name]['width'])
-    #             #self.text[class_name]['box'].set_height(self.text[class_name]['height'])
-    #         #else:
-    #         #print(f"DEBUG 92 classname box: {class_name} is None...?")
+    def _focar_indice(self):
+        for text in self.texts_found:
+            text.set_color("black")
+        texto = self.texts_found[self.index_atual]
+        texto.set_color("red")
+        x, y = texto.get_position()
+        self.axes.set_xlim(x - 3, x + 3)
+        self.axes.set_ylim(y - 3, y + 3)
+        #self.text_box.set_val(texto.get_text())
+        self.fig.canvas.draw_idle()
+    
+    def update_dimensions(self, event):
+        self.update_text_fontsize()
+
 
     def calculate_scale(self):
         # Obtém limites atuais do eixo
@@ -120,15 +172,18 @@ class GraphicDrawing:
         for text in self.text.values():
             #text['title_axes_text'].set_fontsize(self.FONTSIZE * scale)
             if text is not None:
+                area_factor = 10 #(text['width']* text['height'])
                 if text['title_axes_text'] is not None:
                     #print(text['width'])
-                    text['title_axes_text'].set_fontsize(self.greater_width**(1/2)*self.greater_height*self.FONTSIZETITLE*scale)
+                    #print(f"self.FONTSIZETITLE: {self.FONTSIZETITLE}, area_factor: {area_factor}, scale: {scale}")
+                    fontsizetitle = min(max(self.FONTSIZETITLE * area_factor * scale, 1), 26)
+                    text['title_axes_text'].set_fontsize(fontsizetitle)
                 if text['attributes_axes_text'] is not None:
                     for text_attributes in text['attributes_axes_text']:
                         #text_attributes.set_fontsize(self.FONTSIZETITLE * scale)
                         if text_attributes is not None:
-                            text_attributes.set_fontsize(self.greater_width**(1/2)*self.greater_height*self.FONTSIZE*scale)
-
+                            fontsizeattribute = min(self.FONTSIZE * area_factor * scale, 24)
+                            text_attributes.set_fontsize(fontsizeattribute)
         # Redesenha
         self.fig.canvas.draw_idle()
     
@@ -310,6 +365,7 @@ class GraphicDrawing:
         pbar.update(incrementation)
         
         count = 0
+        
         #print(f"classes_drawed: {classes_drawed}")
         for child, parent in self.relationships:
             #print("line 221", child)
@@ -326,7 +382,8 @@ class GraphicDrawing:
                 
         incrementation = self.MAXIMUM -total_incrementation
         pbar.update(incrementation)
-                
+        
+        ##self.totalTextElement = len(self.text[class_name]['attributes_axes_text']+[self.text[class_name]['title_axes_text']])
                 
         plt.tight_layout()
         plt.show()
