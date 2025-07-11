@@ -5,10 +5,16 @@ from matplotlib.patches import FancyBboxPatch, FancyArrowPatch
 import matplotlib.lines as mlines
 from math import sin, cos, floor, pi, atan2, isinf
 from tqdm import tqdm
+from statistics import harmonic_mean, geometric_mean
+
+def media_harmonica(valores):
+    n = len(valores)
+    return n / sum(1 / x for x in valores)
+
 
 class GraphicDrawing:
     
-    def __init__(self, classes = None, relationships = None, sides = 4, limit_classes = float("inf"), limit_relationships = float("inf")):
+    def __init__(self, classes = None, relationships = None, sides = 4, limit_classes = float("inf")):
         
         #constants
         self.BOX_WIDTH_DEFAULT, self.BOX_HEIGHT_DEFAULT = 1.6, 0.8
@@ -27,37 +33,35 @@ class GraphicDrawing:
         self.relationships = relationships
         self.pbar = None
         self.text = dict()
-        self.text['title'] = list()
-        self.text['data'] = list()
+        
         
         #numbers
         self.limit_classes = limit_classes
-        self.limit_relationships = limit_relationships
         self.sides = sides
         
         #Initialize instance variables
         count=0
-        for classes_name, class_data in self.classes.items():
-            class_data["width"] = max(max(self.larger_string_size_list(class_data["attrs"]) * self.FONTSIZE * 0.004, len(classes_name)* self.FONTSIZETITLE * 0.004), self.BOX_WIDTH_DEFAULT)
-            class_data["height"] = max(self.BOX_HEIGHT_DEFAULT +len(class_data["attrs"]) * self.FONTSIZE * 0.025,self.BOX_HEIGHT_DEFAULT)
-            class_data["angle"] = count*(360//self.sides)
+        self.greater_width = 0
+        self.greater_height = 0
+        for class_name, class_attributes in self.classes.items():
+            class_attributes["width"] = max(max(self.larger_string_size_list(class_attributes["attrs"]) * self.FONTSIZE * 0.004, len(class_name)* self.FONTSIZETITLE * 0.004), self.BOX_WIDTH_DEFAULT)
+            class_attributes["height"] = max(self.BOX_HEIGHT_DEFAULT +len(class_attributes["attrs"]) * self.FONTSIZE * 0.025,self.BOX_HEIGHT_DEFAULT)
+            class_attributes["angle"] = count*(360//self.sides)
             count+=1
-        
-        count=0
-        count2 = 0
-        depth = self.calculate_greater_area(self.classes)
-        depth2 = depth
-        for classes_name, class_data in self.classes.items():
-            x,y = self.angle_radius_sin_optimized(class_data["angle"]+((180//self.sides) if (count//self.sides % 2) else 0))*depth, self.angle_radius_cos_optimized(class_data["angle"]+((180//self.sides) if (count//self.sides % 2) else 0))*depth
-            class_data["pos"] = (x,y)
-            print(f"depth: {depth} depth2: {depth2}")
-            if (count+1) % self.sides*2 == 0:
-                try:
-                    count2+=2
-                    depth = depth2*(count2+1)
-                except:
-                    pass
-            count+=1
+            self.text[class_name] = dict()
+            self.text[class_name]['title_axes_text'] = None
+            self.text[class_name]['attributes_axes_text'] = list()
+            self.text[class_name]['title'] = class_name
+            self.text[class_name]['attributes'] = class_attributes["attrs"]
+            self.text[class_name]['width'] = class_attributes["width"]
+            self.text[class_name]['height'] = class_attributes["height"]
+            self.text[class_name]['box'] = None
+            
+            if class_attributes["width"] > self.greater_width:
+                self.greater_width = class_attributes["width"]
+            
+            if class_attributes["height"] > self.greater_height:
+                self.greater_height = class_attributes["height"]
             
         self.total_length = len(self.classes)
         self.MAXIMUM = 100
@@ -65,13 +69,36 @@ class GraphicDrawing:
         self.fig, self.axes = plt.subplots(figsize=(12, 6))
         self.base_xlim = self.axes.get_xlim()
         self.base_ylim = self.axes.get_ylim()
-        self.axes.callbacks.connect("xlim_changed", self.update_text_fontsize)
-        self.axes.callbacks.connect("ylim_changed", self.update_text_fontsize)
+        self.axes.callbacks.connect("xlim_changed", self.update_dimensions)
+        self.axes.callbacks.connect("ylim_changed", self.update_dimensions)
+        #print("TESTE")
         self.axes.set_xlim(-3, 10)
         self.axes.set_ylim(-3, 8)
         self.axes.axis("on")
     
-    def update_text_fontsize(self, event):
+    def update_dimensions(self, event):
+        #self.update_width_and_height_boxs()
+        self.update_text_fontsize()
+        
+    # def update_width_and_height_boxs(self):
+    #     # Obtém limites atuais do eixo
+    #     cur_xlim = self.axes.get_xlim()
+    #     cur_ylim = self.axes.get_ylim()
+
+    #     # Calcula escala atual em relação aos limites base
+    #     scale_x = abs((self.base_xlim[1] - self.base_xlim[0]) / (cur_xlim[1] - cur_xlim[0]))
+    #     scale_y = abs((self.base_ylim[1] - self.base_ylim[0]) / (cur_ylim[1] - cur_ylim[0]))
+        
+    #     for class_name, class_attributes in self.classes.items():
+    #         self.text[class_name]['width'] = max(class_attributes["width"] * scale_x *7.5, class_attributes["width"]) #max(max(self.larger_string_size_list(class_attributes["attrs"]) * self.FONTSIZE * 0.004, len(class_name)* self.FONTSIZETITLE * 0.004), self.BOX_WIDTH_DEFAULT)
+    #         #self.text[class_name]['height'] = class_attributes["height"] * scale_y*7.5
+    #         if self.text[class_name]['box'] is not None:
+    #             self.text[class_name]['box'].set_width(self.text[class_name]['width'])
+    #             #self.text[class_name]['box'].set_height(self.text[class_name]['height'])
+    #         #else:
+    #         #print(f"DEBUG 92 classname box: {class_name} is None...?")
+
+    def calculate_scale(self):
         # Obtém limites atuais do eixo
         cur_xlim = self.axes.get_xlim()
         cur_ylim = self.axes.get_ylim()
@@ -81,43 +108,55 @@ class GraphicDrawing:
         scale_y = abs((self.base_ylim[1] - self.base_ylim[0]) / (cur_ylim[1] - cur_ylim[0]))
 
         # Usa a menor escala para manter proporção visual
-        scale = max(scale_x, scale_y)*8
-        print(f"scale_x: {scale_x}, scale_y: {scale_y}, scale: {scale}")
-
+        scale = max(scale_x, scale_y)
+        
+        return scale
+    
+    def update_text_fontsize(self):
+        scale = self.calculate_scale()
+        #print(f"scale_x: {scale_x}, scale_y: {scale_y}, scale: {scale}")
+        
         # Atualiza o tamanho da fonte
-        for text_title in self.text['title']:
-            text_title.set_fontsize(self.FONTSIZE * scale)
-            print("T1")
-            
-        for text_data in self.text['data']:
-            text_data.set_fontsize(self.FONTSIZETITLE * scale)
-            print("T2")
+        for text in self.text.values():
+            #text['title_axes_text'].set_fontsize(self.FONTSIZE * scale)
+            if text is not None:
+                if text['title_axes_text'] is not None:
+                    #print(text['width'])
+                    text['title_axes_text'].set_fontsize(self.greater_width**(1/2)*self.greater_height*self.FONTSIZETITLE*scale)
+                if text['attributes_axes_text'] is not None:
+                    for text_attributes in text['attributes_axes_text']:
+                        #text_attributes.set_fontsize(self.FONTSIZETITLE * scale)
+                        if text_attributes is not None:
+                            text_attributes.set_fontsize(self.greater_width**(1/2)*self.greater_height*self.FONTSIZE*scale)
 
         # Redesenha
         self.fig.canvas.draw_idle()
     
-    def _draw_box(self, class_name, class_data, x, y, box_width, box_height, edge_color="black", face_color="#e6f2ff"):
+    def _draw_box(self, class_name, class_attributes, x, y, box_width, box_height, edge_color="black", face_color="#e6f2ff"):
         
         # Caixa da classe
-        self.axes.add_patch(FancyBboxPatch(
+        self.text[class_name]['box'] = FancyBboxPatch(
             (x, y), box_width, box_height,
             boxstyle="round,pad=0.05", edgecolor=edge_color, facecolor=face_color
-        ))
+        )
+        
+        self.axes.add_patch(self.text[class_name]['box'])
 
         #título    
         local_title_y = y + box_height - 0.2
         text_title = self.axes.text(x + 0.05, local_title_y, class_name, fontsize=self.FONTSIZETITLE, weight="bold", va="top")
-        self.text['title'].append(text_title)
+        self.text[class_name]['title_axes_text'] = text_title
+        
         #dados
-        for i, attr in enumerate(class_data["attrs"]):
-            text_data = self.axes.text(x + 0.05, y +box_height -0.5 - self.FONTSIZETITLE * 0.02 * i, attr, fontsize=self.FONTSIZE, va="top")
-            self.text['data'].append(text_data)
+        for i, attr in enumerate(class_attributes["attrs"]):
+            text_attributes = self.axes.text(x + 0.05, y +box_height -0.5 - self.FONTSIZETITLE * 0.02 * i, attr, fontsize=self.FONTSIZE, va="top")
+            self.text[class_name]['attributes_axes_text'].append(text_attributes)
 
     def _draw_box_recursively(self, count, subclasses, sides, box_width, box_height, edge_color="black", face_color="#e6f2ff"):
         if count != sides:
             subclass = dict(list(subclasses.items())[count:count+1])
-            for class_name, class_data in subclass.items():
-                self._draw_box(class_name, class_data, class_data["pos"][0], class_data["pos"][1], max(class_data["width"], box_width), max(class_data["height"], box_height), edge_color, face_color)
+            for class_name, class_attributes in subclass.items():
+                self._draw_box(class_name, class_attributes, class_attributes["pos"][0], class_attributes["pos"][1], max(class_attributes["width"], box_width), max(class_attributes["height"], box_height), edge_color, face_color)
             self._draw_box_recursively(count +1, subclasses, sides, box_width, box_height, edge_color, face_color)
         else:
             return
@@ -165,15 +204,16 @@ class GraphicDrawing:
             color="black", linewidth=1.2
         )
         self.axes.add_patch(arrow)
+        
         # Cardinalidade básica
         self.axes.text((x1 + x2) / 2 + 0.2, (y1 + y2) / 2 + 0.2, "0..* ➝ 1", fontsize=8, color="gray")
 
     def larger_class_size_attributes_dict(self, classes):
         max_size = 0
         #class_greater = None
-        for class_name, class_data in classes.items():
-            if len(class_data["attrs"]) > max_size:
-                max_size = len(class_data["attrs"])
+        for class_name, class_attributes in classes.items():
+            if len(class_attributes["attrs"]) > max_size:
+                max_size = len(class_attributes["attrs"])
                 #class_greater = class_name
         return max_size
     
@@ -186,8 +226,8 @@ class GraphicDrawing:
     
     def calculate_greater_area(self, classes):
         max_size = 0
-        for class_name, class_data in classes.items():
-            area = (class_data["width"] + class_data["height"])/2
+        for class_name, class_attributes in classes.items():
+            area = (class_attributes["width"] + class_attributes["height"])/2
             #print(f"classname: {class_name}, width: {width}, height: {height}, area: {area}")
             if area > max_size:
                 max_size = area
@@ -197,10 +237,10 @@ class GraphicDrawing:
     def draw_classes(self): 
         pbar = tqdm(total=self.MAXIMUM, desc="Process for draw classes")
         count = 0
+        count2 = 0
         position_left = 0
-        position_right = self.sides
         continue_draw = True
-        continue_flag = continue_draw
+        classes_drawed = list()
         incrementation = (self.sides/self.total_length)*self.MAXIMUM
         total_incrementation = 0
         if total_incrementation + incrementation > self.MAXIMUM:
@@ -221,22 +261,41 @@ class GraphicDrawing:
             total_incrementation += incrementation
             #print(f"total_incrementation: {total_incrementation}")
             pbar.update(incrementation)
-            continue_draw = continue_flag
             
             if  self.limit_classes > count*self.sides:
+                position_right = self.sides * (count+1)
+                if position_right > self.limit_classes:
+                    position_right = self.limit_classes
+                #print(f"position_left: {position_left},  position_right: {position_right}")
+                #print(f"self.limit_classes: {self.limit_classes}, count*self.sides: {count*self.sides}: self.limit_classes > count*self.sides: {self.limit_classes > count*self.sides}")
                 subclasses = dict(list(self.classes.items())[position_left:position_right])
+                
+                depth = self.calculate_greater_area(subclasses) *(count2+1)
+                count2+= 2
+                #print(f"count: {count}")
+                for class_name, class_attributes in subclasses.items():
+                    x,y = self.angle_radius_sin_optimized(class_attributes["angle"]+((180//self.sides) if (count % 2) else 0))*depth, self.angle_radius_cos_optimized(class_attributes["angle"]+((180//self.sides) if (count % 2) else 0))*depth
+                    class_attributes["pos"] = (x,y)
+                    
+                #print(f"before: classes_drawed: {classes_drawed}, len(classes_drawed): {len(classes_drawed)}")
+                classes_drawed += list(self.classes.keys())[position_left:position_right]
+                #print(f"after: classes_drawed: {classes_drawed}, len(classes_drawed): {len(classes_drawed)}")
                 self._draw_box_recursively(0, subclasses, self.sides, self.BOX_WIDTH_DEFAULT, self.BOX_HEIGHT_DEFAULT)
                 position_left = position_right
-                position_right = self.sides * (count+1) * 2
+                #print(f"self.sides: {self.sides}, count: {count}, self.sides * (count+1) * 2: {self.sides * (count+1) * 2}")
+                #print(f"after position_right: {position_right}")
                 #print(f"position_right: {position_right}, self.total_length: {self.total_length}")
                 count+=1
                 if position_right >= self.total_length:
                     position_right = self.total_length
-                    continue_flag = False
+                    continue_draw = False
             else:
-                incrementation = self.MAXIMUM -total_incrementation
-                pbar.update(incrementation)
-                break
+                continue_draw = False
+
+        incrementation = self.MAXIMUM -total_incrementation
+        pbar.update(incrementation)
+        
+        #print(f"self.limit_classes: {self.limit_classes}, count*self.sides: {count*self.sides}, len(classes_drawed): {len(classes_drawed)} classes_drawed: {classes_drawed}")
         
         pbar = None
         pbar = tqdm(total=self.MAXIMUM, desc="Process for draw relationships")
@@ -251,6 +310,7 @@ class GraphicDrawing:
         pbar.update(incrementation)
         
         count = 0
+        #print(f"classes_drawed: {classes_drawed}")
         for child, parent in self.relationships:
             #print("line 221", child)
             if total_incrementation + incrementation > self.MAXIMUM:
@@ -260,15 +320,13 @@ class GraphicDrawing:
             total_incrementation += incrementation
             
             pbar.update(incrementation)
-            if  self.limit_relationships > count:
-                #print("line 229", child)
+            if list(filter(lambda x: child == x, classes_drawed)) and list(filter(lambda x: parent == x, classes_drawed)):
+                #print(f"line 263, child: {child}, parent: {parent}")
                 self._draw_relationship(child, parent, classes)
-            else:
-                incrementation = self.MAXIMUM -total_incrementation
-                pbar.update(incrementation)
-                break
                 
-            count+=1
+        incrementation = self.MAXIMUM -total_incrementation
+        pbar.update(incrementation)
+                
                 
         plt.tight_layout()
         plt.show()
@@ -280,12 +338,12 @@ class Controller:
         validated = False
         while not validated:
             try:
-                name = input("Digite o nome do arquivo com o esquema: ")
+                name = input("Enter the file name with the squema: ")
                 with open(name) as file:
                     content = file.read()
                 validated = True
             except:
-                print("Erro na tentativa de ler o arquivo. Tente novamente!")
+                print("Error while reading the file. Try again!")
         return content
 
     @staticmethod
@@ -411,7 +469,32 @@ if __name__ == "__main__":
         content = controller.get_scope_type(content, TYPE)
         classes = controller.convert_tables_to_JSON(content, TYPE)
         relationships = controller.identify_relationships(classes)
-        drawing = GraphicDrawing(classes, relationships, sides = 4, limit_classes = 10, limit_relationships = 10)
+        choice = input("Do you want to limit the scope of the classes? (y/n): ")
+        
+        if choice.lower() == 'y':
+            quantity = 'error'
+            while not quantity.isdigit():
+                quantity = input("Define a integer limit quantity: ")
+            quantity = int(quantity)
+            choice = input("Would you like to enter the sides quantity (y/n): ")
+            sides_quantity = 'error'
+            if choice.lower() == 'y':
+                while not sides_quantity.isdigit():
+                    sides_quantity = input("Enter the sides quantity: ")
+                sides_quantity = int(sides_quantity)
+                drawing = GraphicDrawing(classes, relationships, sides = sides_quantity, limit_classes = quantity)
+            else:
+                drawing = GraphicDrawing(classes, relationships, sides = 4, limit_classes = quantity)
+        else:
+            choice = input("Would you like to enter the sides quantity (y/n): ")
+            sides_quantity = 'error'
+            if choice.lower() == 'y':
+                while not sides_quantity.isdigit():
+                    sides_quantity = input("Enter the sides quantity: ")
+                sides_quantity = int(sides_quantity)
+                drawing = GraphicDrawing(classes, relationships, sides = sides_quantity)
+            else:
+                drawing = GraphicDrawing(classes, relationships)
     else:
         drawing = GraphicDrawing(classes, relationships)
         
