@@ -20,6 +20,10 @@ class GraphicDrawing:
         self.FONTSIZETITLE = 10
         self.FONTSIZE = 8
         
+        #booleans
+        self.is_selected_text = False
+        self.is_selected_text_wrapper = False
+        
         #functions
         self.precision_function = lambda x, expoent: x * floor(0.5 * (abs(x - 10**(-expoent) + 1) - abs(x - 10**(-expoent)) + 1)) - x * floor(0.5 * (abs(x + 10**(-expoent) + 1) - abs(x + 10**(-expoent)) + 1)) + x
         self.angle_radius_sin = lambda x : sin(pi*x/180)
@@ -33,15 +37,20 @@ class GraphicDrawing:
         self.pbar = None
         self.text = dict()
         self.texts_found = list()
+        self.previous_text = None
         
         #numbers
+        self.fim_texto_cursor = 0
+        self.index_atual = 0
+        self.inicio_texto_cursor = 0
         self.limit_classes = limit_classes
+        self.previous_text_box_search_length = 0
         self.sides = sides
         self.totalTextElement = 0
-        self.index_atual = 0
         
         #strings
         self.valor_buscado = str()
+        self.previous_text_box_search = str()
         
         #Initialize instance variables
         count=0
@@ -72,17 +81,19 @@ class GraphicDrawing:
                 self.greater_height = class_attributes["height"]
                 
         if PRINT_CLASS_NAMES:
-            print("\n")
+            print(f"Total: {count} classes.\n")
             
         self.total_length = len(self.classes)
         self.MAXIMUM = 100
         
         self.fig, self.axes = plt.subplots(figsize=(12, 6))
         self.fig.set_constrained_layout(True)
-        axbox = self.fig.add_axes([0.2, 0.05, 0.6, 0.075])  # [left, bottom, width, height]
+        axbox = self.fig.add_axes([0.2, 0.0675, 0.3, 0.0375])  # [left, bottom, width, height]
         self.text_box = TextBox(axbox, "Buscar texto:")
         self.text_box.on_submit(self.buscar_texto)
-        axes_radio = plt.axes([0.05, 0.4, 0.2, 0.2])  # [left, bottom, width, height]
+        self.cursor = 0  # posição inicial do cursor
+        self.selecao_final = self.cursor
+        axes_radio = plt.axes([0.2, 0.02, 0.3, 0.0375])  # [left, bottom, width, height]
         self.radio = RadioButtons(axes_radio, ('Palavra exata', 'Palavra Aproximada'))
         self.radio.on_clicked(self.mudar_pesquisa)
         self.search_function = lambda a,b: a.lower() == b.lower()
@@ -123,26 +134,98 @@ class GraphicDrawing:
             self.axes.set_xlim(x - w/2, x + w/2)
             self.axes.set_ylim(y - h/2, y + h/2)
             self.fig.canvas.draw_idle()
-        else:
-            print("Texto não encontrado:", self.valor_buscado)
+        # else:
+        #     print("Texto não encontrado:", self.valor_buscado)
     
     def tratar_tecla(self, event):
+        #print(f"event.key == 'home' and event.shift: {event.key == 'shift+home'}, event.key == 'end' and event.shift: {event.key == 'shift+end'}")
         #print(f"self.texts_found: {self.texts_found}, self.totalTextElement: {self.totalTextElement}")
+        self.text_box.set_val(str(self.text_box.text).replace("[", "").replace("]", ""))
+        
         if event.key == "pageup":
-            self.index_atual = (self.index_atual - 1) % self.totalTextElement
-            self._focar_indice()
+            if self.totalTextElement > 0:
+                self.index_atual = (self.index_atual - 1) % self.totalTextElement
+                self._focar_indice()
         elif event.key == "pagedown" or event.key == "enter":
-            self.index_atual = (self.index_atual + 1) % self.totalTextElement
-            self._focar_indice()
+            if self.totalTextElement > 0:
+                self.index_atual = (self.index_atual + 1) % self.totalTextElement
+                self._focar_indice()
         elif event.key == "esc":
-            self.text_box.set_val("")  # Limpa o campo
-            self.texts_found[self.index_atual].set_color("black")
-            self.fig.canvas.draw_idle()
+            if len(self.texts_found) > 0:
+                self.text_box.set_val("")  # Limpa o campo
+                self.texts_found[self.index_atual].set_color("black")
+                self.cursor = 0
+                self.fig.canvas.draw_idle()
+        elif event.key == 'shift+home':
+            print(f"DEBUG 148 tratar_tecla() <before> | cursor: {self.cursor}, self.text_box.text: {self.text_box.text}, len(self.text_box.text): {len(self.text_box.text)}, self.selecao_final: {self.selecao_final}, self.cursor: {self.cursor}")
+            self.cursor = max(0, self.cursor)
+            self.selecao_final = 0 #len(self.text_box.text)-1
+            print(f"DEBUG 150 tratar_tecla() <after> | cursor: {self.cursor}, self.text_box.text: {self.text_box.text}, len(self.text_box.text): {len(self.text_box.text)}, self.selecao_final: {self.selecao_final}, self.cursor: {self.cursor}")
+            if abs(self.cursor -self.selecao_final) > 0:
+                self.atualizar_texto_selecionado()
+        elif event.key == 'shift+end':
+            print(f"DEBUG 153 tratar_tecla() <before> | cursor: {self.cursor}, self.text_box.text: {self.text_box.text}, len(self.text_box.text): {len(self.text_box.text)}, self.selecao_final: {self.selecao_final}, self.cursor: {self.cursor}")
+            self.selecao_final = len(self.text_box.text) #max(self.cursor, self.selecao_final)
+            self.cursor = min(len(self.text_box.text), self.cursor)
+            print(f"DEBUG 155 tratar_tecla() <after> | cursor: {self.cursor}, self.text_box.text: {self.text_box.text}, len(self.text_box.text): {len(self.text_box.text)}, self.selecao_final: {self.selecao_final}, self.cursor: {self.cursor}")
+            if abs(self.cursor -self.selecao_final) > 0:
+                self.atualizar_texto_selecionado()
+        elif event.key == "left":
+            self.cursor = max(0, self.cursor - 1)
+        elif event.key == "right":
+            self.cursor = min(len(self.text_box.text), self.cursor + 1)
+        elif event.key == "end":
+            self.cursor = len(self.text_box.text)
+            self.selecao_final = 0
+        elif event.key == "home":
+            self.cursor = 0
+            self.selecao_final = len(self.text_box.text)
+        elif event.key == "delete" and self.is_selected_text:
+            self.text_box.set_val(self.text_box.text.replace(self.text_box.text[self.inicio_texto_cursor:self.fim_texto_cursor], ""))
+        elif event.key == "ctrl+a":
+            self.cursor = 0
+            self.selecao_final = len(self.text_box.text)
+            self.atualizar_texto_selecionado()
+        else:
+            if self.previous_text_box_search_length < len(self.text_box.text):
+                if self.previous_text_box_search == self.text_box.text[:-1]:
+                    self.cursor+=1
+                else:
+                    self.search_cursor()
+            self.previous_text_box_search = self.text_box.text
+            self.previous_text_box_search_length = len(self.text_box.text)
+        
+        if not self.is_selected_text_wrapper:
+            if self.is_selected_text:
+                self.is_selected_text = False
+        else:
+            self.is_selected_text_wrapper = False
+        
 
+    def search_cursor(self):
+        position = self.text_box.text.find(self.text_box.text[self.cursor:])+1
+        if position != 0:
+            self.cursor = position #+ self.cursor
+            
+    
+    def atualizar_texto_selecionado(self):
+        print(f"DEBUG 188 atualizar_texto_selecionado() | self.selecao_final: {self.selecao_final}, self.cursor: {self.cursor}")
+        self.inicio_texto_cursor = min(self.cursor, self.selecao_final)
+        self.fim_texto_cursor = max(self.cursor, self.selecao_final)
+        selecionado = self.text_box.text[self.inicio_texto_cursor:self.fim_texto_cursor]
+        print(f"DEBUG 162 atualizar_texto_selecionado()  | selecionado: {selecionado}")
+        texto_visual = (self.text_box.text[:self.inicio_texto_cursor] +
+                        "[" + selecionado + "]" +
+                        self.text_box.text[self.fim_texto_cursor:])
+        self.text_box.set_val(texto_visual)
+        self.is_selected_text = True
+        self.is_selected_text_wrapper = True
+    
     def _focar_indice(self):
-        for text in self.texts_found:
-            text.set_color("black")
+        if self.previous_text is not None:
+            self.previous_text.set_color("black")
         texto = self.texts_found[self.index_atual]
+        self.previous_text = texto
         texto.set_color("red")
         x, y = texto.get_position()
         self.axes.set_xlim(x - 3, x + 3)
@@ -333,7 +416,7 @@ class GraphicDrawing:
                 count2+= 2
                 #print(f"count: {count}")
                 for class_name, class_attributes in subclasses.items():
-                    x,y = self.angle_radius_sin_optimized(class_attributes["angle"]+((180//self.sides) if (count % 2) else 0))*depth, self.angle_radius_cos_optimized(class_attributes["angle"]+((180//self.sides) if (count % 2) else 0))*depth
+                    x,y = self.angle_radius_sin_optimized(class_attributes["angle"]+((180//self.sides) if (count % 2) else 0))*depth*(2 if (count % 2) else 1), self.angle_radius_cos_optimized(class_attributes["angle"]+((180//self.sides) if (count % 2) else 0))*depth
                     class_attributes["pos"] = (x,y)
                     
                 #print(f"before: classes_drawed: {classes_drawed}, len(classes_drawed): {len(classes_drawed)}")
@@ -397,12 +480,16 @@ class Controller:
     @staticmethod
     def get_content():
         validated = False
+        content = None
         while not validated:
             try:
                 name = input("Enter the file name with the squema: ")
-                with open(name) as file:
-                    content = file.read()
-                validated = True
+                if len(name) > 0:
+                    with open(name) as file:
+                        content = file.read()
+                    validated = True
+                else:
+                    break
             except:
                 print("Error while reading the file. Try again!")
         return content
@@ -484,12 +571,9 @@ if __name__ == "__main__":
             ],
             "pos": (1, 2)
         },
-        "FUNC_CAD_EMPREGO": {
-            "attrs": [
-                "Cod_Tipo_emprego: Int",
-                "Tipo_emprego: String"
-            ],
-            "pos": (1, 0)
+        "FUNC_DEP": {
+            "attrs": [],
+            "pos": (3.2, 2)
         },
         "FUNC_CAD_EST_CIVIL": {
             "attrs": [
@@ -498,17 +582,20 @@ if __name__ == "__main__":
             ],
             "pos": (3, 1)
         },
-        "FUNC": {
-            "attrs": [],
-            "pos": (2, 0.8)
-        },
-        "FUNC_DEP": {
-            "attrs": [],
-            "pos": (3.2, 2)
-        },
         "FUNC_BENEFICIO": {
             "attrs": [],
             "pos": (0, 3)
+        },
+        "FUNC_CAD_EMPREGO": {
+            "attrs": [
+                "Cod_Tipo_emprego: Int",
+                "Tipo_emprego: String"
+            ],
+            "pos": (1, 0)
+        },
+        "FUNC": {
+            "attrs": [],
+            "pos": (2, 0.8)
         }
     }
 
@@ -527,35 +614,39 @@ if __name__ == "__main__":
     if choice == '1':
         controller = Controller()
         content = controller.get_content()
-        content = controller.get_scope_type(content, TYPE)
-        classes = controller.convert_tables_to_JSON(content, TYPE)
-        relationships = controller.identify_relationships(classes)
-        choice = input("Do you want to limit the scope of the classes? (y/n): ")
-        
-        if choice.lower() == 'y':
-            quantity = 'error'
-            while not quantity.isdigit():
-                quantity = input("Define a integer limit quantity: ")
-            quantity = int(quantity)
-            choice = input("Would you like to enter the sides quantity (y/n): ")
-            sides_quantity = 'error'
+        if content is not None:
+            content = controller.get_scope_type(content, TYPE)
+            classes = controller.convert_tables_to_JSON(content, TYPE)
+            relationships = controller.identify_relationships(classes)
+            choice = input("Do you want to limit the scope of the classes? (y/n): ")
+            
             if choice.lower() == 'y':
-                while not sides_quantity.isdigit():
-                    sides_quantity = input("Enter the sides quantity: ")
-                sides_quantity = int(sides_quantity)
-                drawing = GraphicDrawing(classes, relationships, sides = sides_quantity, limit_classes = quantity)
+                quantity = 'error'
+                while not quantity.isdigit() or len(quantity) == 0:
+                    quantity = input("Define a integer limit quantity: ")
+                if len(quantity) != 0:
+                    quantity = int(quantity)
+                    choice = input("Would you like to enter the sides quantity (y/n): ")
+                    sides_quantity = 'error'
+                    if choice.lower() == 'y':
+                        while not sides_quantity.isdigit() or sides_quantity == '':
+                            sides_quantity = input("Enter the sides quantity: ")
+                        
+                        if sides_quantity != '':
+                            sides_quantity = int(sides_quantity)
+                            drawing = GraphicDrawing(classes, relationships, sides = sides_quantity, limit_classes = quantity)
+                    else:
+                        drawing = GraphicDrawing(classes, relationships, sides = 4, limit_classes = quantity)
             else:
-                drawing = GraphicDrawing(classes, relationships, sides = 4, limit_classes = quantity)
-        else:
-            choice = input("Would you like to enter the sides quantity (y/n): ")
-            sides_quantity = 'error'
-            if choice.lower() == 'y':
-                while not sides_quantity.isdigit():
-                    sides_quantity = input("Enter the sides quantity: ")
-                sides_quantity = int(sides_quantity)
-                drawing = GraphicDrawing(classes, relationships, sides = sides_quantity)
-            else:
-                drawing = GraphicDrawing(classes, relationships)
+                choice = input("Would you like to enter the sides quantity (y/n): ")
+                sides_quantity = 'error'
+                if choice.lower() == 'y':
+                    while not sides_quantity.isdigit():
+                        sides_quantity = input("Enter the sides quantity: ")
+                    sides_quantity = int(sides_quantity)
+                    drawing = GraphicDrawing(classes, relationships, sides = sides_quantity)
+                else:
+                    drawing = GraphicDrawing(classes, relationships)
     else:
         drawing = GraphicDrawing(classes, relationships)
         
