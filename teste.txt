@@ -1,0 +1,158 @@
+import sys
+from threading import Thread
+from flask import Flask
+import dash
+from dash import html
+import dash_cytoscape as cyto
+
+from PyQt6.QtWidgets import QApplication, QMainWindow
+from PyQt6.QtWebEngineWidgets import QWebEngineView
+from PyQt6.QtCore import QUrl
+
+# Constantes
+FONTSIZE = 10
+
+# Dados de entrada
+classes = {
+    "FUNC_BENEFICIO_CAD": {
+        "attrs": ["Cod_Beneficio: Int", "Descricao_beneficio: String", "Valor_Beneficio: Decimal"] * 3,
+        "pos": (100, 200)
+    },
+    "FUNC_CAD_EMPREGO": {
+        "attrs": ["Cod_Tipo_emprego: Int", "Tipo_emprego: String"],
+        "pos": (100, 100)
+    },
+    "FUNC_CAD_EST_CIVIL": {
+        "attrs": ["Cod_Est_civil: Int", "Estado_Civil: String?"],
+        "pos": (300, 150)
+    },
+    "FUNC": {
+        "attrs": [],
+        "pos": (200, 140)
+    },
+    "FUNC_DEP": {
+        "attrs": [],
+        "pos": (320, 200)
+    },
+    "FUNC_BENEFICIO": {
+        "attrs": [],
+        "pos": (0, 300)
+    }
+}
+
+relationships = [
+    ("FUNC", "FUNC_CAD_EMPREGO"),
+    ("FUNC", "FUNC_CAD_EST_CIVIL"),
+    ("FUNC_DEP", "FUNC_CAD_EST_CIVIL"),
+    ("FUNC_BENEFICIO", "FUNC_BENEFICIO_CAD"),
+]
+
+# Geração dos elementos para o diagrama
+def gerar_elementos_cytoscape(classes, relationships):
+    elements = []
+
+    for class_name, dados in classes.items():
+        attr_string = "\n".join(dados["attrs"])
+        x, y = dados["pos"]
+        altura = 80 + len(dados["attrs"]) * FONTSIZE * 0.5
+
+        elements.append({
+            'data': {
+                'id': class_name,
+                'label': f"{class_name}\n{attr_string}" if attr_string else class_name,
+                'width': 160,
+                'height': altura
+            },
+            'position': {'x': x, 'y': y},  # <<< agora usa a posição certa!
+            'classes': 'classe'
+        })
+
+    for child, parent in relationships:
+        elements.append({
+            'data': {
+                'source': child,
+                'target': parent,
+                'label': "0..* ➝ 1"
+            },
+            'classes': 'relacionamento'
+        })
+
+    return elements
+
+# Flask + Dash
+server = Flask(__name__)
+dash_app = dash.Dash(__name__, server=server, url_base_pathname='/cytoscape/')
+
+elements = gerar_elementos_cytoscape(classes, relationships)
+
+stylesheet = [
+    {
+        'selector': '.classe',
+        'style': {
+            'shape': 'roundrectangle',
+            'background-color': '#e6f2ff',
+            'border-color': 'black',
+            'border-width': 2,
+            'label': 'data(label)',
+            'width': 'data(width)',
+            'height': 'data(height)',
+            'font-size': FONTSIZE,
+            'text-wrap': 'wrap',
+            'text-valign': 'top',
+            'text-halign': 'left',
+            'padding': '5px',
+            'text-margin-y': 5,
+            'text-max-width': 160
+        }
+    },
+    {
+        'selector': '.relacionamento',
+        'style': {
+            'curve-style': 'bezier',
+            'target-arrow-shape': 'triangle',
+            'target-arrow-color': 'black',
+            'line-color': 'black',
+            'width': 1.5,
+            'label': 'data(label)',
+            'font-size': 10,
+            'text-background-color': '#ffffff',
+            'text-background-opacity': 1,
+            'text-margin-y': -10,
+            'text-rotation': 'autorotate'
+        }
+    }
+]
+
+dash_app.layout = html.Div([
+    cyto.Cytoscape(
+        id='diagrama',
+        layout={'name': 'preset'},
+        style={'width': '100%', 'height': '100vh'},
+        elements=elements,
+        stylesheet=stylesheet
+    )
+])
+
+# Thread para rodar o servidor Flask
+def run_server():
+    server.run(debug=False, port=8050, use_reloader=False)
+
+# Janela Qt
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Visualização de Classes com Cytoscape")
+        self.resize(1000, 800)
+
+        self.browser = QWebEngineView()
+        self.browser.setUrl(QUrl("http://localhost:8050/cytoscape/"))
+
+        self.setCentralWidget(self.browser)
+
+# Executa tudo
+if __name__ == "__main__":
+    Thread(target=run_server, daemon=True).start()
+    qt_app = QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
+    sys.exit(qt_app.exec())
