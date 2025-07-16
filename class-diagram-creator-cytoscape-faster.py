@@ -1,5 +1,5 @@
 # [] pegar os números 3,4,5,6,7 e 10 para fazer as operações de orientação de estrutura. Se o resto da divisão é as operações aritméticas não derem um desses números, então o default para a estrutura de montagem de um diagrama de classes é 4.
-
+from dash import ClientsideFunction
 import sys
 from threading import Thread
 from flask import Flask
@@ -475,8 +475,13 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Visualização de Classes com Cytoscape")
-        self.resize(1000, 800)
-
+        self.SCREEN_WIDTH = 1000
+        self.SCREEN_HEIGHT = 800
+        self.resize(self.SCREEN_WIDTH, self.SCREEN_HEIGHT)
+        self.center_x = 0
+        self.center_y = 0
+        self.current_x = 0
+        self.current_y = 0
         self.browser = QWebEngineView()
         self.browser.setUrl(QUrl("http://localhost:8050/cytoscape/"))
 
@@ -497,6 +502,30 @@ class MainWindow(QMainWindow):
         """
         new_x = current_pan.get('x', 0) + dx
         new_y = current_pan.get('y', 0) + dy
+        
+        return {'x': new_x, 'y': new_y}
+    
+    def centralize_camera(self,current_pan):
+        """
+        Update the camera position by offsetting the current position.
+
+        Parameters:
+            current_pan (dict): The current {'x': int, 'y': int} position of the camera.
+            dx (int): Offset in the x direction.
+            dy (int): Offset in the y direction.
+
+        Returns:
+            dict: The new pan position.
+        """
+        current_x = current_pan.get('x', 0)
+        current_y = current_pan.get('y', 0)
+        total_x = self.center_x +self.SCREEN_WIDTH
+        total_y = self.center_y + self.SCREEN_HEIGHT
+        #new_x = self.center_x -current_x +self.SCREEN_WIDTH
+        new_x = total_x -current_x 
+        #new_y =  self.center_y -current_y +self.SCREEN_HEIGHT-380
+        new_y =  total_y -current_y -380
+        print(f"self.center_x: {self.center_x}, self.center_y: {self.center_y}, self.SCREEN_WIDTH: {self.SCREEN_WIDTH}, self.SCREEN_HEIGHT: {self.SCREEN_HEIGHT}\ncurrent_x: {current_x}, current_y: {current_y}, new_x: {new_x}, new_y: {new_y}")
         return {'x': new_x, 'y': new_y}
     
 if __name__ == "__main__":
@@ -616,52 +645,96 @@ if __name__ == "__main__":
                 'text-margin-y': -10,
                 'text-rotation': 'autorotate',
                 'width': 1.5,
-            }
+                }
         }, {
-            'selector': '.classe',
-            'style': {
-                'border-width': 1,
-                'color': '#003366',
-                'text-justification': 'left',
-                'label': 'data(label)',
-                'padding': '5px',
-                'shape': 'roundrectangle',
-                'text-halign': 'center',
-                'text-valign': 'center',
-                'text-wrap': 'wrap',
-            }
-        }]
+                'selector': '.classe',
+                'style': {
+                    'border-width': 1,
+                    'color': '#003366',
+                    'text-justification': 'left',
+                    'label': 'data(label)',
+                    'padding': '5px',
+                    'shape': 'roundrectangle',
+                    'text-halign': 'center',
+                    'text-valign': 'center',
+                    'text-wrap': 'wrap',
+                }
+        }
+        ]
         
-        center_x = sum(dados["pos"][0] for dados in classes.values()) / len(classes)
-        center_y = sum(dados["pos"][1] for dados in classes.values()) / len(classes)
-
+        for element in elements: # Remover a classe style do dicionário dos elementos e passar para o stylesheet a fim de não dar avisos desnecessários e nem inconsistências.
+            if 'data' in element:
+                if 'id' in element['data']:
+                    id = element['data']['id']
+                    if 'style' in element:
+                        style = element['style']
+                        new_selector_style = dict()
+                        new_selector_style['selector'] = f"#{id}"
+                        new_selector_style['style'] = style
+                        stylesheet.append(new_selector_style)
+                        element['classes'] += f' {id}'
+                        element.pop('style', None)
+                
+        
+        
+        center_x = int(sum(dados["pos"][0] for dados in classes.values()) / len(classes))
+        center_y = int(sum(dados["pos"][1] for dados in classes.values()) / len(classes))
+        print(f"window.center_x: {center_x}, window.center_y: {center_y}")
+        
         dash_app.layout = html.Div([
-            html.Button("Move camera to right", id="btn", n_clicks=0),
-            dcc.Store(id="camera-state", data={"x": 0, "y": 0}),
+            html.Button("Centralizar", id="btn-centralize", n_clicks=0),
+            dcc.Store(id="camera-state", data={"pan": {'x': center_x, 'y': center_y}, "zoom": 1}),
+            html.Div([
+            dcc.Input(
+                id='search-input',
+                placeholder='Search for a class...',
+                type='text',
+                style={'width': '300px', 'padding': '8px'}
+            )
+            ], style={
+                'position': 'fixed',
+                'bottom': '20px',
+                'left': '20px',
+                'zIndex': 1000,  # Garante que fique acima do Cytoscape
+                'background': '#ffffff',
+                'border': '1px solid #ccc',
+                'color': 'black',
+                'font-size': 10,
+                'border-radius': '4px',
+                'box-shadow': '0px 2px 4px rgba(0,0,0,0.2)',
+                'padding': '10px'
+            }),
             cyto.Cytoscape(
-                id='diagrama',
+                id='diagram',
                 layout={'name': 'preset'},
                 style={'width': '100%', 'height': '100vh'},
                 elements=elements,
                 stylesheet=stylesheet,
                 zoom=1,
-                pan={'x': center_x, 'y': center_y}
+                pan={'x': center_x, 'y': center_y},
+                wheelSensitivity=0.2
             )
         ])
         
+        
         @dash_app.callback(
-            Output('cytoscape', 'pan'),
+            Output('diagram', 'pan'),
             Output('camera-state', 'data'),
-            Input('btn', 'n_clicks'),
+            Input('btn-centralize', 'n_clicks'),
             State('camera-state', 'data'),
-            prevent_initial_call=True
+            prevent_initial_call=False
         )
-        def move_camera(n_clicks, camera_data):
-            new_pan = drawing.update_camera(camera_data, dx=100, dy=100)
+        def centralize_camera(n_clicks, camera_data):
+            print(f"camera_data: {camera_data}, n_clicks: {n_clicks}")
+            new_pan = window.centralize_camera(camera_data)
             return new_pan, new_pan
+
+
         
         Thread(target=controller.run_server, daemon=True).start()
         qt_app = QApplication(sys.argv)
         window = MainWindow()
+        window.center_x = center_x
+        window.center_y = center_y
         window.show()
         sys.exit(qt_app.exec())
