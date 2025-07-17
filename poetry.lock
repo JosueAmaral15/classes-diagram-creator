@@ -297,6 +297,18 @@ dash = "*"
 leaflet = ["dash-leaflet (>=1.0.16rc3)"]
 
 [[package]]
+name = "dash-iconify"
+version = "0.1.2"
+description = "Iconify for Plotly Dash"
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "dash_iconify-0.1.2-py3-none-any.whl", hash = "sha256:9ab0eda19bb4514e177bf1f8f36947bb9e5b44aba6ce947f22a1cf0f1a45fc14"},
+    {file = "dash_iconify-0.1.2.tar.gz", hash = "sha256:564774be6b11b0ac3a8999b7137c3d17a1d351d69b673aa313c7228eacc9d143"},
+]
+
+[[package]]
 name = "flask"
 version = "3.1.1"
 description = "A simple framework for building complex web applications."
@@ -1203,4 +1215,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13"
-content-hash = "dfd6719b22f505a8f5458eb27dce323b076a14b950f7419c5d40d91ce81bb029"
+content-hash = "a3badc40e03293403f1e516f27591f7f195456662092644deaaa5b2c98479e99"

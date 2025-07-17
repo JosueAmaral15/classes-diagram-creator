@@ -1,16 +1,15 @@
 # [] pegar os números 3,4,5,6,7 e 10 para fazer as operações de orientação de estrutura. Se o resto da divisão é as operações aritméticas não derem um desses números, então o default para a estrutura de montagem de um diagrama de classes é 4.
-from dash import ClientsideFunction
 import sys
 from threading import Thread
 from flask import Flask
 import dash
 from dash import html, dcc, Output, Input, State
 import dash_cytoscape as cyto
-
+from dash.dependencies import ClientsideFunction
 from PyQt6.QtWidgets import QApplication, QMainWindow
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtCore import QUrl
-
+from dash_iconify import DashIconify
 from math import sin, cos, floor, pi, atan2, isinf
 from tqdm import tqdm
 from statistics import harmonic_mean, geometric_mean
@@ -389,6 +388,11 @@ class GraphicDrawing:
         
 class Controller:
     
+    def __init__(self, type):
+        self.type = type
+        self.classes = None
+        self.relationships = None
+    
     @staticmethod
     def get_content():
         validated = False
@@ -469,6 +473,103 @@ class Controller:
     @staticmethod
     def run_server():
         server.run(debug=False, port=8050, use_reloader=False)
+    
+    def get_graphic_drawing_object(self):
+        # Definição das classes
+        classes = {
+            "FUNC_BENEFICIO_CAD": {
+                "attrs": [
+                    "Cod_Beneficiosadkjhfgsdjhfgsdjhgfsjhdfgsjdhgfjshdgfshdgfjgsdjhfsdgfjhsgdjfgsdgfm: Int",
+                    "Descricao_beneficio: String",
+                    "Valor_Beneficio: Decimal",
+                    "Cod_Beneficio: Int",
+                    "Descricao_beneficio: String",
+                    "Valor_Beneficio: Decimal",
+                    "Cod_Beneficio: Int",
+                    "Descricao_beneficio: String",
+                    "Valor_Beneficio: Decimal"
+                ],
+                "pos": (1, 2)
+            },
+            "FUNC_DEP": {
+                "attrs": [],
+                "pos": (3.2, 2)
+            },
+            "FUNC_CAD_EST_CIVIL": {
+                "attrs": [
+                    "Cod_Est_civil: Int",
+                    "Estado_Civil: String?"
+                ],
+                "pos": (3, 1)
+            },
+            "FUNC_BENEFICIO": {
+                "attrs": [],
+                "pos": (0, 3)
+            },
+            "FUNC_CAD_EMPREGO": {
+                "attrs": [
+                    "Cod_Tipo_emprego: Int",
+                    "Tipo_emprego: String"
+                ],
+                "pos": (1, 0)
+            },
+            "FUNC": {
+                "attrs": [],
+                "pos": (2, 0.8)
+            }
+        }
+
+        # Relacionamentos
+        relationships = [
+            ("FUNC", "FUNC_CAD_EMPREGO"),
+            ("FUNC", "FUNC_CAD_EST_CIVIL"),
+            ("FUNC_DEP", "FUNC_CAD_EST_CIVIL"),
+            ("FUNC_BENEFICIO", "FUNC_BENEFICIO_CAD"),
+        ]
+        choice = input("Class Diagram Creator\n\nChoose an option:\n\n\t1.Create my own class diagram.\n\t2. Create a example.\n\noption: ")
+        drawing = None
+        
+        if choice == '1':
+            content = controller.get_content()
+            if content is not None:
+                content = controller.get_scope_type(content, self.type)
+                classes = controller.convert_tables_to_JSON(content, self.type)
+                relationships = controller.identify_relationships(classes)
+                choice = input("Do you want to limit the scope of the classes? (y/n): ")
+                
+                if choice.lower() == 'y':
+                    quantity = 'error'
+                    while not quantity.isdigit() or len(quantity) == 0:
+                        quantity = input("Define a integer limit quantity: ")
+                    if len(quantity) != 0:
+                        quantity = int(quantity)
+                        choice = input("Would you like to enter the sides quantity (y/n): ")
+                        sides_quantity = 'error'
+                        if choice.lower() == 'y':
+                            while not sides_quantity.isdigit() or sides_quantity == '':
+                                sides_quantity = input("Enter the sides quantity: ")
+                            
+                            if sides_quantity != '':
+                                sides_quantity = int(sides_quantity)
+                                drawing = GraphicDrawing(classes, relationships, sides = sides_quantity, limit_classes = quantity)
+                        else:
+                            drawing = GraphicDrawing(classes, relationships, sides = 4, limit_classes = quantity)
+                else:
+                    choice = input("Would you like to enter the sides quantity (y/n): ")
+                    sides_quantity = 'error'
+                    if choice.lower() == 'y':
+                        while not sides_quantity.isdigit():
+                            sides_quantity = input("Enter the sides quantity: ")
+                        sides_quantity = int(sides_quantity)
+                        drawing = GraphicDrawing(classes, relationships, sides = sides_quantity)
+                    else:
+                        drawing = GraphicDrawing(classes, relationships)
+        else:
+            drawing = GraphicDrawing(classes, relationships)
+        
+        self.classes = classes
+        self.relationships = relationships
+        return drawing
 
 # Janela Qt
 class MainWindow(QMainWindow):
@@ -484,153 +585,29 @@ class MainWindow(QMainWindow):
         self.current_y = 0
         self.browser = QWebEngineView()
         self.browser.setUrl(QUrl("http://localhost:8050/cytoscape/"))
-
+        self.browser.loadFinished.connect(self.on_load_finished)
         self.setCentralWidget(self.browser)
-    
-    @staticmethod
-    def update_camera(current_pan, dx=100, dy=100):
-        """
-        Update the camera position by offsetting the current position.
-
-        Parameters:
-            current_pan (dict): The current {'x': int, 'y': int} position of the camera.
-            dx (int): Offset in the x direction.
-            dy (int): Offset in the y direction.
-
-        Returns:
-            dict: The new pan position.
-        """
-        new_x = current_pan.get('x', 0) + dx
-        new_y = current_pan.get('y', 0) + dy
         
-        return {'x': new_x, 'y': new_y}
-    
-    def centralize_camera(self,current_pan):
+    def on_load_finished(self):
+        js_disable_scroll = """
+            document.body.style.overflow = 'hidden';
+            document.documentElement.style.overflow = 'hidden';
         """
-        Update the camera position by offsetting the current position.
-
-        Parameters:
-            current_pan (dict): The current {'x': int, 'y': int} position of the camera.
-            dx (int): Offset in the x direction.
-            dy (int): Offset in the y direction.
-
-        Returns:
-            dict: The new pan position.
-        """
-        current_x = current_pan.get('x', 0)
-        current_y = current_pan.get('y', 0)
-        total_x = self.center_x +self.SCREEN_WIDTH
-        total_y = self.center_y + self.SCREEN_HEIGHT
-        #new_x = self.center_x -current_x +self.SCREEN_WIDTH
-        new_x = total_x -current_x 
-        #new_y =  self.center_y -current_y +self.SCREEN_HEIGHT-380
-        new_y =  total_y -current_y -380
-        print(f"self.center_x: {self.center_x}, self.center_y: {self.center_y}, self.SCREEN_WIDTH: {self.SCREEN_WIDTH}, self.SCREEN_HEIGHT: {self.SCREEN_HEIGHT}\ncurrent_x: {current_x}, current_y: {current_y}, new_x: {new_x}, new_y: {new_y}")
-        return {'x': new_x, 'y': new_y}
+        self.browser.page().runJavaScript(js_disable_scroll)
     
 if __name__ == "__main__":
     
-    # Definição das classes
-    classes = {
-        "FUNC_BENEFICIO_CAD": {
-            "attrs": [
-                "Cod_Beneficiosadkjhfgsdjhfgsdjhgfsjhdfgsjdhgfjshdgfshdgfjgsdjhfsdgfjhsgdjfgsdgfm: Int",
-                "Descricao_beneficio: String",
-                "Valor_Beneficio: Decimal",
-                "Cod_Beneficio: Int",
-                "Descricao_beneficio: String",
-                "Valor_Beneficio: Decimal",
-                "Cod_Beneficio: Int",
-                "Descricao_beneficio: String",
-                "Valor_Beneficio: Decimal"
-            ],
-            "pos": (1, 2)
-        },
-        "FUNC_DEP": {
-            "attrs": [],
-            "pos": (3.2, 2)
-        },
-        "FUNC_CAD_EST_CIVIL": {
-            "attrs": [
-                "Cod_Est_civil: Int",
-                "Estado_Civil: String?"
-            ],
-            "pos": (3, 1)
-        },
-        "FUNC_BENEFICIO": {
-            "attrs": [],
-            "pos": (0, 3)
-        },
-        "FUNC_CAD_EMPREGO": {
-            "attrs": [
-                "Cod_Tipo_emprego: Int",
-                "Tipo_emprego: String"
-            ],
-            "pos": (1, 0)
-        },
-        "FUNC": {
-            "attrs": [],
-            "pos": (2, 0.8)
-        }
-    }
-
-    # Relacionamentos
-    relationships = [
-        ("FUNC", "FUNC_CAD_EMPREGO"),
-        ("FUNC", "FUNC_CAD_EST_CIVIL"),
-        ("FUNC_DEP", "FUNC_CAD_EST_CIVIL"),
-        ("FUNC_BENEFICIO", "FUNC_BENEFICIO_CAD"),
-    ]
-    
+    TYPE = 'model'
     # Flask + Dash
     server = Flask(__name__)
     dash_app = dash.Dash(__name__, server=server, url_base_pathname='/cytoscape/')
     
-    TYPE = 'model'
-    choice = input("Class Diagram Creator\n\nChoose an option:\n\n\t1.Create my own class diagram.\n\t2. Create a example.\n\noption: ")
-    drawing = None
-    controller = Controller()
-    
-    if choice == '1':
-        content = controller.get_content()
-        if content is not None:
-            content = controller.get_scope_type(content, TYPE)
-            classes = controller.convert_tables_to_JSON(content, TYPE)
-            relationships = controller.identify_relationships(classes)
-            choice = input("Do you want to limit the scope of the classes? (y/n): ")
-            
-            if choice.lower() == 'y':
-                quantity = 'error'
-                while not quantity.isdigit() or len(quantity) == 0:
-                    quantity = input("Define a integer limit quantity: ")
-                if len(quantity) != 0:
-                    quantity = int(quantity)
-                    choice = input("Would you like to enter the sides quantity (y/n): ")
-                    sides_quantity = 'error'
-                    if choice.lower() == 'y':
-                        while not sides_quantity.isdigit() or sides_quantity == '':
-                            sides_quantity = input("Enter the sides quantity: ")
-                        
-                        if sides_quantity != '':
-                            sides_quantity = int(sides_quantity)
-                            drawing = GraphicDrawing(classes, relationships, sides = sides_quantity, limit_classes = quantity)
-                    else:
-                        drawing = GraphicDrawing(classes, relationships, sides = 4, limit_classes = quantity)
-            else:
-                choice = input("Would you like to enter the sides quantity (y/n): ")
-                sides_quantity = 'error'
-                if choice.lower() == 'y':
-                    while not sides_quantity.isdigit():
-                        sides_quantity = input("Enter the sides quantity: ")
-                    sides_quantity = int(sides_quantity)
-                    drawing = GraphicDrawing(classes, relationships, sides = sides_quantity)
-                else:
-                    drawing = GraphicDrawing(classes, relationships)
-    else:
-        drawing = GraphicDrawing(classes, relationships)
+    controller = Controller(type = TYPE)
+    drawing = controller.get_graphic_drawing_object()
         
     if drawing is not None:
         elements = drawing.draw_classes()
+        
         stylesheet = [{
             'selector': '.relacionamento',
             'style': {
@@ -659,6 +636,29 @@ if __name__ == "__main__":
                     'text-valign': 'center',
                     'text-wrap': 'wrap',
                 }
+        },
+        {
+            'selector': '.invisible',
+            'style': {
+                'background-opacity': 0,
+                'border-opacity': 0,
+                'label': '',
+                'width': 1,
+                'height': 1
+            }
+        },
+        {
+            'selector': '.highlight',
+            'style': {
+                'background-color': '#ffff00',
+                'text-background-color': '#ffff00',
+                'text-background-opacity': 1,
+                'border-width': 3,
+                'border-color': 'orange',
+                'target-arrow-color': 'yellow',
+                'transition-property': 'background-color, line-color, target-arrow-color',
+                'transition-duration': '0.5s'
+            }
         }
         ]
         
@@ -677,24 +677,65 @@ if __name__ == "__main__":
                 
         
         
-        center_x = int(sum(dados["pos"][0] for dados in classes.values()) / len(classes))
-        center_y = int(sum(dados["pos"][1] for dados in classes.values()) / len(classes))
+        center_x = int(sum(dados["pos"][0] for dados in controller.classes.values()) / len(controller.classes))
+        center_y = int(sum(dados["pos"][1] for dados in controller.classes.values()) / len(controller.classes))
+        
+        elements.append({
+            'data': {'id': 'anchor'},
+            'position': {'x': center_x, 'y': center_y},
+            'classes': 'invisible'
+        })
+
         print(f"window.center_x: {center_x}, window.center_y: {center_y}")
         
         dash_app.layout = html.Div([
-            html.Button("Centralizar", id="btn-centralize", n_clicks=0),
+            html.Button("Restaurar visualização", id="btn-reset-view", n_clicks=0),
             dcc.Store(id="camera-state", data={"pan": {'x': center_x, 'y': center_y}, "zoom": 1}),
+            dcc.Store(id="dummy-store", data={"results": [], "currentIndex": 0}),
+            dcc.Store(id="search-results-store", data={"results": [], "currentIndex": 0}),
+            html.Div(id="debug-output", style={"position": "fixed", "top": "10px", "left": "200px", "background": "#eee", "padding": "5px", "zIndex": 9999}),
+            html.Button(
+                [
+                    DashIconify(icon="mdi:magnify", width=20, height=20),
+                ],
+                id="btn-search",
+                title="Pesquisar",
+                n_clicks=0,
+                style={
+                    'padding': '8px',
+                    'border': '1px solid #ccc',
+                    'borderRadius': '4px',
+                    'backgroundColor': '#f5f5f5',
+                    'cursor': 'pointer',
+                    'position': 'fixed',
+                    'bottom': '15px',
+                    'left': '357px',
+                    'zIndex': 1001,
+                    
+                }
+            ),
             html.Div([
             dcc.Input(
                 id='search-input',
                 placeholder='Search for a class...',
                 type='text',
-                style={'width': '300px', 'padding': '8px'}
+                style={'width': '300px', 'padding': '8px'},
+                debounce=True,
+                n_submit=0  # usado para capturar Enter
+            ),
+            dcc.RadioItems(
+                id='radio-options',
+                options=[
+                    {'label': 'Palavra exata', 'value': 'exata'},
+                    {'label': 'Palavra aproximada', 'value': 'aproximada'}
+                ],
+                value='exata',
+                labelStyle={'display': 'inline-block', 'marginRight': '15px'}
             )
             ], style={
                 'position': 'fixed',
-                'bottom': '20px',
-                'left': '20px',
+                'bottom': '10px',
+                'left': '10px',
                 'zIndex': 1000,  # Garante que fique acima do Cytoscape
                 'background': '#ffffff',
                 'border': '1px solid #ccc',
@@ -702,7 +743,10 @@ if __name__ == "__main__":
                 'font-size': 10,
                 'border-radius': '4px',
                 'box-shadow': '0px 2px 4px rgba(0,0,0,0.2)',
-                'padding': '10px'
+                'padding': '10px',
+                'display': 'flex',
+                'flexDirection': 'column',
+                'gap': '5px'
             }),
             cyto.Cytoscape(
                 id='diagram',
@@ -716,21 +760,74 @@ if __name__ == "__main__":
             )
         ])
         
-        
-        @dash_app.callback(
-            Output('diagram', 'pan'),
+        dash_app.clientside_callback(
+            ClientsideFunction(namespace='clientside', function_name='restoreInitialView'),
             Output('camera-state', 'data'),
-            Input('btn-centralize', 'n_clicks'),
-            State('camera-state', 'data'),
-            prevent_initial_call=False
+            Input('btn-reset-view', 'n_clicks'),
+            prevent_initial_call=True
         )
-        def centralize_camera(n_clicks, camera_data):
-            print(f"camera_data: {camera_data}, n_clicks: {n_clicks}")
-            new_pan = window.centralize_camera(camera_data)
-            return new_pan, new_pan
-
-
+               
+        # # highlightSearchResults -> atualiza resultados
+        # dash_app.clientside_callback(
+        #     ClientsideFunction(namespace='clientside', function_name='highlight_and_focus_current_Result_with_button_search'),
+        #     Output('search-results-store', 'data'),
+        #     Input('btn-search', 'n_clicks'),
+        #     Input('search-input', 'n_submit'),
+        #     State('search-input', 'value'),
+        #     State('radio-options', 'value'),
+        #     prevent_initial_call=True
+        # )
         
+        #highlightSearchResults -> atualiza resultados
+        # dash_app.clientside_callback(
+        #     ClientsideFunction(namespace='clientside', function_name='highlightSearchResults'),
+        #     Output('search-results-store', 'data'),
+        #     Input('btn-search', 'n_clicks'),
+        #     State('search-input', 'value'),
+        #     State('radio-options', 'value'),
+        #     State('dummy-store', 'data'),
+        #     prevent_initial_call=True
+        # )
+
+        # # focusCurrentResult -> só lida com foco visual
+        # dash_app.clientside_callback(
+        #     ClientsideFunction(namespace='clientside', function_name='focusCurrentResult'),
+        #     Output('dummy-store', 'data'),  # só pra forçar execução
+        #     Input('search-input', 'n_submit'),
+        #     Input('btn-search', 'n_clicks'),
+        #     State('search-results-store', 'data'),
+        #     prevent_initial_call=True
+        # )
+
+        # dash_app.clientside_callback(
+        #     ClientsideFunction(namespace='clientside', function_name='highlightAndFocusResults'),
+        #     Output('search-results-store', 'data'),
+        #     Input('btn-search', 'n_clicks'),
+        #     State('search-input', 'value'),
+        #     State('radio-options', 'value'),
+        #     prevent_initial_call=True
+        # )
+        
+        # dash_app.clientside_callback(
+        #     ClientsideFunction(namespace='clientside', function_name='focusCurrentResult'),
+        #     Output('search-results-store', 'data'),
+        #     Input('search-input', 'n_submit'),
+        #     State('search-results-store', 'data'),
+        #     prevent_initial_call=True
+        # )
+        
+        dash_app.clientside_callback(
+            ClientsideFunction(namespace='clientside', function_name='highlightAndNavigate'),
+            Output('search-results-store', 'data'),
+            Input('btn-search', 'n_clicks'),
+            Input('search-input', 'n_submit'),
+            State('search-input', 'value'),
+            State('radio-options', 'value'),
+            State('search-results-store', 'data'),
+            prevent_initial_call=True
+        )
+
+
         Thread(target=controller.run_server, daemon=True).start()
         qt_app = QApplication(sys.argv)
         window = MainWindow()
