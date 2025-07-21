@@ -8,11 +8,11 @@ import dash_cytoscape as cyto
 from dash.dependencies import ClientsideFunction
 from PyQt6.QtWidgets import QApplication, QMainWindow
 from PyQt6.QtWebEngineWidgets import QWebEngineView
-from PyQt6.QtCore import QUrl
+from PyQt6.QtCore import QTimer, QUrl
 from dash_iconify import DashIconify
-from math import sin, cos, floor, pi, atan2, isinf
+from math import sin, cos, floor, pi
+#from PyQt6.QtWebChannel import QWebChannel
 from tqdm import tqdm
-from statistics import harmonic_mean, geometric_mean
 
 PRINT_CLASS_NAMES = True
 
@@ -25,10 +25,6 @@ class GraphicDrawing:
         self.FONTSIZETITLE = 10
         self.FONTSIZE = 8
         
-        #booleans
-        self.is_selected_text = False
-        self.is_selected_text_wrapper = False
-        
         #functions
         self.precision_function = lambda x, expoent: x * floor(0.5 * (abs(x - 10**(-expoent) + 1) - abs(x - 10**(-expoent)) + 1)) - x * floor(0.5 * (abs(x + 10**(-expoent) + 1) - abs(x + 10**(-expoent)) + 1)) + x
         self.angle_radius_sin = lambda x : sin(pi*x/180)
@@ -40,24 +36,12 @@ class GraphicDrawing:
         self.classes = classes if limit_classes == float("inf") else classes[:limit_classes]
         self.elements = list()
         self.pbar = None
-        self.previous_text = None
         self.relationships = relationships
         self.text = dict()
-        self.texts_found = list()
         
         #numbers
-        self.fim_texto_cursor = 0
-        self.index_atual = 0
-        self.inicio_texto_cursor = 0
         self.limit_classes = limit_classes
-        self.previous_text_box_search_length = 0
         self.sides = sides
-        self.totalTextElement = 0
-        self.growth_factor = 2
-        
-        #strings
-        self.valor_buscado = str()
-        self.previous_text_box_search = str()
         
         #Initialize instance variables
         count=0
@@ -92,135 +76,7 @@ class GraphicDrawing:
             
         self.total_length = len(self.classes)
         self.MAXIMUM = 100
-    
-    def mudar_pesquisa(self, label):
-        if label == 'Palavra exata':
-            self.search_function = lambda a,b: a.lower() == b.lower()
-        elif label == 'Palavra Aproximada':
-            self.search_function = lambda a, b: a.lower() in b.lower()
-        
-        if self.valor_buscado:
-            self._focar_indice()
-    
-    # Callback de busca
-    def buscar_texto(self, valor):
-        self.texts_found = list()
-        self.totalTextElement = 0
-        self.valor_buscado = valor.strip().lower()
-        found = False
-        for class_name in self.classes.keys():
-            for text in self.text[class_name]['attributes_axes_text']+[self.text[class_name]['title_axes_text']]:
-                if self.search_function(self.valor_buscado, text.get_text()):
-                    self.texts_found.append(text)
-                    if not found:
-                        found = True
-        if found:
-            self.totalTextElement = len(self.texts_found)
-            x, y = text.get_position()
-            w, h = 5, 5
-            #self.axes.set_xlim(x - w/2, x + w/2)
-            #self.axes.set_ylim(y - h/2, y + h/2)
-            ##self.fig.canvas.draw_idle()
-        # else:
-        #     print("Texto não encontrado:", self.valor_buscado)
-    
-    def tratar_tecla(self, event):
-        #print(f"event.key == 'home' and event.shift: {event.key == 'shift+home'}, event.key == 'end' and event.shift: {event.key == 'shift+end'}")
-        #print(f"self.texts_found: {self.texts_found}, self.totalTextElement: {self.totalTextElement}")
-        self.text_box.set_val(str(self.text_box.text).replace("[", "").replace("]", ""))
-        
-        if event.key == "pageup":
-            if self.totalTextElement > 0:
-                self.index_atual = (self.index_atual - 1) % self.totalTextElement
-                self._focar_indice()
-        elif event.key == "pagedown" or event.key == "enter":
-            if self.totalTextElement > 0:
-                self.index_atual = (self.index_atual + 1) % self.totalTextElement
-                self._focar_indice()
-        elif event.key == "esc":
-            if len(self.texts_found) > 0:
-                self.text_box.set_val("")  # Limpa o campo
-                self.texts_found[self.index_atual].set_color("black")
-                self.cursor = 0
-                #self.fig.canvas.draw_idle()
-        elif event.key == 'shift+home':
-            #print(f"DEBUG 148 tratar_tecla() <before> | cursor: {self.cursor}, self.text_box.text: {self.text_box.text}, len(self.text_box.text): {len(self.text_box.text)}, self.selecao_final: {self.selecao_final}, self.cursor: {self.cursor}")
-            self.cursor = max(0, self.cursor)
-            self.selecao_final = 0 #len(self.text_box.text)-1
-            #print(f"DEBUG 150 tratar_tecla() <after> | cursor: {self.cursor}, self.text_box.text: {self.text_box.text}, len(self.text_box.text): {len(self.text_box.text)}, self.selecao_final: {self.selecao_final}, self.cursor: {self.cursor}")
-            if abs(self.cursor -self.selecao_final) > 0:
-                self.atualizar_texto_selecionado()
-        elif event.key == 'shift+end':
-            #print(f"DEBUG 153 tratar_tecla() <before> | cursor: {self.cursor}, self.text_box.text: {self.text_box.text}, len(self.text_box.text): {len(self.text_box.text)}, self.selecao_final: {self.selecao_final}, self.cursor: {self.cursor}")
-            self.selecao_final = len(self.text_box.text) #max(self.cursor, self.selecao_final)
-            self.cursor = min(len(self.text_box.text), self.cursor)
-            #print(f"DEBUG 155 tratar_tecla() <after> | cursor: {self.cursor}, self.text_box.text: {self.text_box.text}, len(self.text_box.text): {len(self.text_box.text)}, self.selecao_final: {self.selecao_final}, self.cursor: {self.cursor}")
-            if abs(self.cursor -self.selecao_final) > 0:
-                self.atualizar_texto_selecionado()
-        elif event.key == "left":
-            self.cursor = max(0, self.cursor - 1)
-        elif event.key == "right":
-            self.cursor = min(len(self.text_box.text), self.cursor + 1)
-        elif event.key == "end":
-            self.cursor = len(self.text_box.text)
-            self.selecao_final = 0
-        elif event.key == "home":
-            self.cursor = 0
-            self.selecao_final = len(self.text_box.text)
-        elif event.key == "delete" and self.is_selected_text:
-            self.text_box.set_val(self.text_box.text.replace(self.text_box.text[self.inicio_texto_cursor:self.fim_texto_cursor], ""))
-        elif event.key == "ctrl+a":
-            self.cursor = 0
-            self.selecao_final = len(self.text_box.text)
-            self.atualizar_texto_selecionado()
-        else:
-            if self.previous_text_box_search_length < len(self.text_box.text):
-                if self.previous_text_box_search == self.text_box.text[:-1]:
-                    self.cursor+=1
-                else:
-                    self.search_cursor()
-            self.previous_text_box_search = self.text_box.text
-            self.previous_text_box_search_length = len(self.text_box.text)
-        
-        if not self.is_selected_text_wrapper:
-            if self.is_selected_text:
-                self.is_selected_text = False
-        else:
-            self.is_selected_text_wrapper = False
-        
-    def search_cursor(self):
-        position = self.text_box.text.find(self.text_box.text[self.cursor:])+1
-        if position != 0:
-            self.cursor = position #+ self.cursor
-            
-    
-    def atualizar_texto_selecionado(self):
-        print(f"DEBUG 188 atualizar_texto_selecionado() | self.selecao_final: {self.selecao_final}, self.cursor: {self.cursor}")
-        self.inicio_texto_cursor = min(self.cursor, self.selecao_final)
-        self.fim_texto_cursor = max(self.cursor, self.selecao_final)
-        selecionado = self.text_box.text[self.inicio_texto_cursor:self.fim_texto_cursor]
-        print(f"DEBUG 162 atualizar_texto_selecionado()  | selecionado: {selecionado}")
-        texto_visual = (self.text_box.text[:self.inicio_texto_cursor] +
-                        "[" + selecionado + "]" +
-                        self.text_box.text[self.fim_texto_cursor:])
-        self.text_box.set_val(texto_visual)
-        self.is_selected_text = True
-        self.is_selected_text_wrapper = True
-    
-    def _focar_indice(self):
-        if self.previous_text is not None:
-            self.previous_text.set_color("black")
-        texto = self.texts_found[self.index_atual]
-        self.previous_text = texto
-        texto.set_color("red")
-        x, y = texto.get_position()
-        #self.axes.set_xlim(x - 3, x + 3)
-        #self.axes.set_ylim(y - 3, y + 3)
-        #self.text_box.set_val(texto.get_text())
-        #self.fig.canvas.draw_idle()
-    
-    def update_dimensions(self, event):
-        self.update_text_fontsize()
+   
     
     def _draw_box(self, class_name, class_attributes, x, y, box_width, box_height, edge_color="black", face_color="#e6f2ff"):
         
@@ -479,7 +335,7 @@ class Controller:
         classes = {
             "FUNC_BENEFICIO_CAD": {
                 "attrs": [
-                    "Cod_Beneficiosadkjhfgsdjhfgsdjhgfsjhdfgsjdhgfjshdgfshdgfjgsdjhfsdgfjhsgdjfgsdgfm: Int",
+                    "Cod_Beneficiosadkjhfgsdjhfgsdjhgfsjhdfgsjdhgfjshdgfshdgfjgsdjhfsdgfjhsgdjfgsdgfasdihasgdyhsgdhajsgdjhasgdjhasgdjashgjdhasgdm: Int",
                     "Descricao_beneficio: String",
                     "Valor_Beneficio: Decimal",
                     "Cod_Beneficio: Int",
@@ -526,7 +382,7 @@ class Controller:
             ("FUNC_DEP", "FUNC_CAD_EST_CIVIL"),
             ("FUNC_BENEFICIO", "FUNC_BENEFICIO_CAD"),
         ]
-        choice = input("Class Diagram Creator\n\nChoose an option:\n\n\t1.Create my own class diagram.\n\t2. Create a example.\n\noption: ")
+        choice = input("Class Diagram Creator\n\nChoose an option:\n\n\t1.Create my own class diagram.\n\t2. Create a example.\n\t3.Exit.\n\noption: ")
         drawing = None
         
         if choice == '1':
@@ -564,12 +420,15 @@ class Controller:
                         drawing = GraphicDrawing(classes, relationships, sides = sides_quantity)
                     else:
                         drawing = GraphicDrawing(classes, relationships)
-        else:
+        elif choice == '2':
             drawing = GraphicDrawing(classes, relationships)
         
-        self.classes = classes
-        self.relationships = relationships
-        return drawing
+        if choice == '1' or choice == '2':
+            self.classes = classes
+            self.relationships = relationships
+            return drawing
+        else:
+            return None
 
 # Janela Qt
 class MainWindow(QMainWindow):
@@ -593,6 +452,7 @@ class MainWindow(QMainWindow):
             document.body.style.overflow = 'hidden';
             document.documentElement.style.overflow = 'hidden';
         """
+        
         self.browser.page().runJavaScript(js_disable_scroll)
     
 if __name__ == "__main__":
@@ -604,7 +464,7 @@ if __name__ == "__main__":
     
     controller = Controller(type = TYPE)
     drawing = controller.get_graphic_drawing_object()
-        
+    
     if drawing is not None:
         elements = drawing.draw_classes()
         
@@ -635,6 +495,8 @@ if __name__ == "__main__":
                     'text-halign': 'center',
                     'text-valign': 'center',
                     'text-wrap': 'wrap',
+                    'z-index': 1,
+                    'font-family' : 'monospace'
                 }
         },
         {
@@ -644,23 +506,32 @@ if __name__ == "__main__":
                 'border-opacity': 0,
                 'label': '',
                 'width': 1,
-                'height': 1
+                'height': 1,
+                'font-family' : 'monospace'
             }
         },
         {
             'selector': '.highlight',
             'style': {
-                'background-color': '#ffff00',
+                'label': 'data(label)',
                 'text-background-color': '#ffff00',
                 'text-background-opacity': 1,
-                'border-width': 3,
-                'border-color': 'orange',
-                'target-arrow-color': 'yellow',
-                'transition-property': 'background-color, line-color, target-arrow-color',
-                'transition-duration': '0.5s'
+                'color': '#000000',
+                'font-weight': 'bold',
+                'text-valign': 'center',
+                'text-halign': 'center',
+                'background-opacity': 0,
+                'border-opacity': 0,
+                'font-size': drawing.FONTSIZE,
+                'z-index': 9999,
+                'events': 'no',
+                'text-wrap': 'wrap',
+                'text-margin-y': 0,
+                'text-margin-x': 0,
+                'border-width': 0,
+                'font-family' : 'monospace'
             }
-        }
-        ]
+        }]
         
         for element in elements: # Remover a classe style do dicionário dos elementos e passar para o stylesheet a fim de não dar avisos desnecessários e nem inconsistências.
             if 'data' in element:
@@ -689,11 +560,13 @@ if __name__ == "__main__":
         print(f"window.center_x: {center_x}, window.center_y: {center_y}")
         
         dash_app.layout = html.Div([
+            html.Div(id="debug-output", style={"position": "fixed", "top": "10px", "left": "200px", "background": "#eee", "padding": "5px", "zIndex": 9999}),
             html.Button("Restaurar visualização", id="btn-reset-view", n_clicks=0),
+            dcc.Interval(id="key-event-poller", interval=500, n_intervals=0),
+            dcc.Store(id="key-event-store", data={}),
             dcc.Store(id="camera-state", data={"pan": {'x': center_x, 'y': center_y}, "zoom": 1}),
             dcc.Store(id="dummy-store", data={"results": [], "currentIndex": 0}),
             dcc.Store(id="search-results-store", data={"results": [], "currentIndex": 0}),
-            html.Div(id="debug-output", style={"position": "fixed", "top": "10px", "left": "200px", "background": "#eee", "padding": "5px", "zIndex": 9999}),
             html.Button(
                 [
                     DashIconify(icon="mdi:magnify", width=20, height=20),
@@ -711,7 +584,6 @@ if __name__ == "__main__":
                     'bottom': '15px',
                     'left': '357px',
                     'zIndex': 1001,
-                    
                 }
             ),
             html.Div([
@@ -766,67 +638,24 @@ if __name__ == "__main__":
             Input('btn-reset-view', 'n_clicks'),
             prevent_initial_call=True
         )
-               
-        # # highlightSearchResults -> atualiza resultados
-        # dash_app.clientside_callback(
-        #     ClientsideFunction(namespace='clientside', function_name='highlight_and_focus_current_Result_with_button_search'),
-        #     Output('search-results-store', 'data'),
-        #     Input('btn-search', 'n_clicks'),
-        #     Input('search-input', 'n_submit'),
-        #     State('search-input', 'value'),
-        #     State('radio-options', 'value'),
-        #     prevent_initial_call=True
-        # )
-        
-        #highlightSearchResults -> atualiza resultados
-        # dash_app.clientside_callback(
-        #     ClientsideFunction(namespace='clientside', function_name='highlightSearchResults'),
-        #     Output('search-results-store', 'data'),
-        #     Input('btn-search', 'n_clicks'),
-        #     State('search-input', 'value'),
-        #     State('radio-options', 'value'),
-        #     State('dummy-store', 'data'),
-        #     prevent_initial_call=True
-        # )
-
-        # # focusCurrentResult -> só lida com foco visual
-        # dash_app.clientside_callback(
-        #     ClientsideFunction(namespace='clientside', function_name='focusCurrentResult'),
-        #     Output('dummy-store', 'data'),  # só pra forçar execução
-        #     Input('search-input', 'n_submit'),
-        #     Input('btn-search', 'n_clicks'),
-        #     State('search-results-store', 'data'),
-        #     prevent_initial_call=True
-        # )
-
-        # dash_app.clientside_callback(
-        #     ClientsideFunction(namespace='clientside', function_name='highlightAndFocusResults'),
-        #     Output('search-results-store', 'data'),
-        #     Input('btn-search', 'n_clicks'),
-        #     State('search-input', 'value'),
-        #     State('radio-options', 'value'),
-        #     prevent_initial_call=True
-        # )
-        
-        # dash_app.clientside_callback(
-        #     ClientsideFunction(namespace='clientside', function_name='focusCurrentResult'),
-        #     Output('search-results-store', 'data'),
-        #     Input('search-input', 'n_submit'),
-        #     State('search-results-store', 'data'),
-        #     prevent_initial_call=True
-        # )
         
         dash_app.clientside_callback(
             ClientsideFunction(namespace='clientside', function_name='highlightAndNavigate'),
             Output('search-results-store', 'data'),
             Input('btn-search', 'n_clicks'),
             Input('search-input', 'n_submit'),
-            State('search-input', 'value'),
+            Input('key-event-store', 'data'),
             State('radio-options', 'value'),
+            State('search-input', 'value'),
             State('search-results-store', 'data'),
             prevent_initial_call=True
         )
-
+        
+        dash_app.clientside_callback(
+            ClientsideFunction(namespace="clientside", function_name="pollKeyEvent"),
+            Output("key-event-store", "data"),
+            Input("key-event-poller", "n_intervals"),
+        )
 
         Thread(target=controller.run_server, daemon=True).start()
         qt_app = QApplication(sys.argv)
