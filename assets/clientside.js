@@ -39,97 +39,130 @@ function larger_string_size(list){
     });
     return max;
 }
+function wrapLabel(text, maxCharsPerLine = 40) {
+  return text
+    .split('\n')  // já existentes
+    .map(line =>
+      line.length > maxCharsPerLine
+        ? line.match(new RegExp('.{1,' + maxCharsPerLine + '}', 'g')).join('\n')
+        : line
+    )
+    .join('\n');
+}
 
-function highlightTextStandalone(node, searchTerm) {
+function highlightTextStandalone(node, searchTerm, search_type) {
     const label = node.data('label');
-    const match = label.match(new RegExp(searchTerm, 'i'));
-    if (!match) return;
-
-    const matchText = match[0];
-    const highlightId = 'highlight_' + node.id();
+    const lines = label.split('\n');
+    total_lines = lines.length;
+    const fontSize = parseFloat(node.style('font-size')) || 10;
+    const charWidth = fontSize;
+    const lineHeight = fontSize;
+    //const padding = (parseFloat(node.style('padding')) || 5);
+    const nodeWidth = node.width();
+    const nodeHeight = node.height();
+    const baseX = node.position('x');
+    const baseY = node.position('y');
+    node.style({'events' : 'no'});
     const groupId = 'group_' + node.id();
-
-    const existing = cy.getElementById(highlightId);
-    if (existing.nonempty()) existing.remove();
-
+     
     if (!cy.getElementById(groupId).nonempty()) {
-        cy.add({ group: 'nodes', data: { id: groupId }, classes: 'invisible' });
+        cy.add({
+            group: 'nodes',
+            data: { id: groupId },
+            classes: 'invisible'
+        });
     }
-
-    const index = label.toLowerCase().indexOf(matchText.toLowerCase());
-    let line_breaks = label.match(/\n/g);
-    const total_line_breaks_quantity = line_breaks ? line_breaks.length : 0;
-    const total_lines = total_line_breaks_quantity +1;
-    const center_lines = Math.floor(total_lines / 2);
-    //Como para cada linha existe uma quantidade de caracteres limitada de acordo com o tamanho definido pelo node.width(), isto quer dizer que, para cada linha, o texto pode ser dividido em N partes
-    const substring = label.substring(0,index);
-    line_breaks = substring.match(/\n/g);
-    const quantity_line_breaks = line_breaks ? line_breaks.length : 0; 
-    const current_line = quantity_line_breaks;
-    const parts = label.split('\n');
-    const current_line_string = parts[quantity_line_breaks];
-    const current_column = current_line_string.toLowerCase().indexOf(matchText.toLowerCase());
-    const greater_column_length = larger_string_size(parts);
-    const center_column = greater_column_length /2;
-    const font_size = parseFloat(node.style('font-size'));
-    // const center_point = cy.getElementById('anchor');
-    // const position = center_point.position();
-    // const center_x = position.x;
-    // const center_y = position.y;
-    // const initial_current_element_place_X = node.position('x') -node.width()/2;
-    // const initial_current_element_place_Y = node.position('y') -node.height()/2;
-    const factor = 1;
-    
-    const horizontal_string_length = font_size * Math.abs(center_column -current_column); 
-    
-    const vertical_string_length = font_size * Math.abs(center_lines - current_line);
-
-    const current_point_X = node.position('x') +(matchText != current_line_string?  horizontal_string_length * (center_column - current_column != 0? (center_column - current_column < 0? 1 : -1) : 0) : 0);
-
-    const current_point_Y = node.position('y') +(total_lines != current_line? vertical_string_length *(center_lines != current_line? (center_lines -current_line < 0? 1 : -1) : 0) : 0);
-
-    const horizontal_string_position =  0; //horizontal_string_position;
-    const vertical_string_position = 0; //vertical_string_position;
-    const distance = 0; // euclideanDistance(node.position('x'), node.position('y'), current_point_X, current_point_Y);
-    const angle = 0; // Math.atan2(current_point_Y -node.position('y'), current_point_X -node.position('x'));
-    if (label == "FUNC_BENEFICIO")
-        debugLog(`index: ${index}, line_breaks: ${line_breaks}, total_line_breaks_quantity: ${total_line_breaks_quantity}, total_lines: ${total_lines}, center_lines: ${center_lines}, substring: ${substring}, quantity_line_breaks: ${quantity_line_breaks}, current_line: ${current_line}, parts: ${parts}, current_line_string: ${current_line_string}, current_column: ${current_column}, center_column: ${center_column}, font_size: ${font_size}, horizontal_string_length: ${horizontal_string_length}, vertical_string_length: ${vertical_string_length}, horizontal_string_position: ${horizontal_string_position}, vertical_string_position: ${vertical_string_position}, current_point_X: ${current_point_X}, current_point_Y: ${current_point_Y}, node.position('x'): ${node.position('x')}, node.position('Y'): ${node.position('x')}, distance: ${distance}, angle: ${angle}.`)
-    node.style('events', 'no');
     node.move({ parent: groupId });
 
-    const highlightNode = cy.add({
-        group: 'nodes',
-        data: {
-            id: highlightId,
-            label: matchText  // agora será visível
-        },
-        position: {
-            // x: node.position('x') +Math.cos(angle)*distance,
-            // y: node.position('y') +Math.sin(angle)*distance
-            x: current_point_X,
-            y: current_point_Y
-        },
-        grabbable: false,
-        selectable: false,
-        classes: 'highlight'
+    const highlights = [];
+
+    if (!search_type) {
+        lines.forEach((line, lineIndex) => {
+            const regex = new RegExp(searchTerm, 'gi');
+            let match;
+            while ((match = regex.exec(line)) !== null) {
+                const columnIndex = match.index;
+                const centerLine = Math.floor(lines.length / 2);
+                const max_column = Math.max(...lines.map(l => l.length));
+                const centerColumn = max_column / 2;
+                const firstPositionX = (nodeWidth -max_column*4.805)/2;
+                const firstPositionY = (nodeHeight -total_lines*8.4375) /2; // Verificar se realmente está certo
+                const offsetX = columnIndex * charWidth*0.6;
+                const offsetY = lineIndex  * lineHeight*1.05;
+                const resultX = baseX -nodeWidth/2 +firstPositionX +offsetX;
+                const resultY = baseY -nodeHeight/2 +firstPositionY +offsetY;
+                //debugLog(`columnIndex: ${columnIndex}, charWidth: ${charWidth}, lineIndex: ${lineIndex}, lineHeight: ${lineHeight}, centerLine: ${centerLine}, max_column: ${max_column}, centerColumn: ${centerColumn}, firstPositionX: ${firstPositionX}, firstPositionY: ${firstPositionY}, offsetX: ${offsetX}, offsetY: ${offsetY}, resultX: ${resultX}, resultY: ${resultY}.`);
+                highlights.push({
+                    id: `highlight_${node.id()}_${highlights.length}`,
+                    text: match[0],
+                    x: resultX,
+                    y: resultY
+                });
+            }
+        });
+    } else {
+        const regex = new RegExp(searchTerm, 'gi');
+        let match;
+        while ((match = regex.exec(lines[0])) !== null) {
+            const columnIndex = match.index;
+            const centerLine = Math.floor(lines.length / 2);
+            const max_column = Math.max(...lines.map(l => l.length));
+            const centerColumn = max_column / 2;
+            const firstPositionX = (nodeWidth -max_column*4.805)/2;
+            const firstPositionY = (nodeHeight -total_lines*8.4375) /2; // Verificar se realmente está certo
+            const offsetX = columnIndex * charWidth*0.6;
+            const offsetY = lineIndex  * lineHeight*1.05;
+            const resultX = baseX -nodeWidth/2 +firstPositionX +offsetX;
+            const resultY = baseY -nodeHeight/2 +firstPositionY +offsetY;
+            //debugLog(`columnIndex: ${columnIndex}, charWidth: ${charWidth}, lineIndex: ${lineIndex}, lineHeight: ${lineHeight}, centerLine: ${centerLine}, max_column: ${max_column}, centerColumn: ${centerColumn}, firstPositionX: ${firstPositionX}, firstPositionY: ${firstPositionY}, offsetX: ${offsetX}, offsetY: ${offsetY}, resultX: ${resultX}, resultY: ${resultY}.`);
+            highlights.push({
+                id: `highlight_${node.id()}_${highlights.length}`,
+                text: match[0],
+                x: resultX,
+                y: resultY
+            });
+        }
+    }
+
+    cy.getElementById(groupId).data('highlight_elements_quantity', highlights.length);
+
+    highlights.forEach(({ id, text, x, y }) => {
+        if (cy.getElementById(id).nonempty()) cy.getElementById(id).remove();
+
+        const highlightNode = cy.add({
+            group: 'nodes',
+            data: {
+                id: id,
+                label: text,
+                fontSize : fontSize
+            },
+            position: { x, y },
+            grabbable: false,
+            selectable: false,
+            classes: 'highlight'
+        });
+
+        highlightNode.move({ parent: groupId });
     });
-
-    highlightNode.move({ parent: groupId });
 }
-
 
 function clearTextHighlights() {
-    cy.nodes().forEach(n => {
-        const highlight = cy.getElementById('highlight_' + n.id());
-        const group = cy.getElementById('group_' + n.id());
-
-        // Remove apenas o destaque, mas move o node de volta à raiz
-        if (highlight.nonempty()) highlight.remove();
-        if (group.nonempty()) n.move({ parent: null });
-        if (group.nonempty()) group.remove();  // remove grupo vazio
+    cy.nodes().forEach(node => {
+        node.style({'events' : 'yes'});
+        const group = cy.getElementById('group_' + node.id());
+        const quantity = group.data('highlight_elements_quantity');
+        for (let i = 0; i < quantity; i++) {
+            const highlight = cy.getElementById('highlight_' + node.id() + '_' + i);
+            if (highlight.nonempty()) highlight.remove();
+        }
+        if (group.nonempty()) node.move({ parent: null });
+        if (group.nonempty()) group.remove();
     });
 }
 
+// function clearTextHighlights(cy) {
+//   cy.nodes('.highlight').remove();
+// }
 
 function highlightNode(node) {
     node.style({
@@ -153,7 +186,6 @@ function debugLog(msg) {
         el.innerText = msg;
     }
 }
-
 
 window.dash_clientside.latestKeyPressed = null;
 
@@ -196,7 +228,7 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
             };
 
             cy.pan(adjustedPan);
-            clearTextHighlights()
+            clearTextHighlights(cy);
             cy.nodes().forEach(element => {
                 resetNodeStyle(element); // estilo padrão
             });
@@ -211,7 +243,7 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
             window.dash_clientside.latestKeyPressed = null;
             return { key: key, timestamp: Date.now() };
         },
-        highlightAndNavigate: function (n_clicks, n_submit, keyEventStore, matchType, searchText, prevStore) {
+        highlightAndNavigate: function (n_clicks, n_submit, keyEventStore, matchType, search_type, searchText, prevStore) {
             
             const cy = window.dash_clientside.cytoscapeInstances?.diagram;
             if (!cy) return window.dash_clientside.no_update;
@@ -230,14 +262,17 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
 
                 results = [];
                 
-                clearTextHighlights(); // restaura os textos
+                clearTextHighlights(cy); // restaura os textos
 
                 cy.nodes().forEach(ele => {
                     const label = (ele.data('label') || '').toLowerCase();
                     const match = matchType === 'exata' ? label === term : label.includes(term);
-
+                    //const lines = label.split('\n');
+                    //const match_scope = search_type === 'all'? true : lines[0].includes(term);
+                    //debugLog(`match_scope: ${match_scope}, match: ${match}, label: ${label}, term: ${term}, lines: ${lines[0]}, search_type: ${search_type}, label: ${label}`);
+                    //const finalMatch = match && match_scope;
                     if (match) {
-                        highlightTextStandalone(ele, term); // muda apenas o texto com <span>
+                        highlightTextStandalone(ele, term, search_type === 'all'); // muda apenas o texto com <span>
                         highlightNode(ele); // aplica estilo visual
                         results.push(ele.id());
                     } else {
@@ -254,18 +289,40 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
                         }
                     const node = cy.getElementById(results[currentIndex]);
                     if (node && !node.empty()) {
-                        cy.animate({ center: { eles: node }, zoom: 1.5 });
+                        const subElementNode = cy.getElementById('highlight_' + node.id() + '_' + 0);
+                        if (subElementNode) {
+                            cy.animate({ center: { eles:  subElementNode}, zoom: 1.5 });
+                        }
                     }
                 } else {
                     currentIndex = 0;
                 }
             } else if (["Escape"].includes(keyEvent)) {
-                clearTextHighlights()
+                clearTextHighlights(cy);
                 cy.nodes().forEach(element => {
                     resetNodeStyle(element); // estilo padrão
                 });
             }
             return { results, currentIndex };
+        },
+        trackMousePosition: function () {
+            const cy = window.dash_clientside.cytoscapeInstances?.diagram;
+            if (!cy) {
+                //debugLog("⚠️ Cytoscape ainda não está pronto");
+                return window.dash_clientside.no_update;
+            }
+            //debugLog("⚠️ Acionado!");
+            cy.on('mousemove', function (event) {
+                //debugLog("⚠️ executando...");
+                const pos = event.position;
+                if (pos) {
+                const output = `X: ${pos.x.toFixed(2)}, Y: ${pos.y.toFixed(2)}`;
+                const div = document.getElementById('mouse-coords');
+                if (div) div.innerText = output;
+                }
+            });
+
+        return '';
         }
     }
 });

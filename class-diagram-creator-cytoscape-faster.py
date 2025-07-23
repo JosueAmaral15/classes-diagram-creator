@@ -12,7 +12,9 @@ from PyQt6.QtCore import QTimer, QUrl
 from dash_iconify import DashIconify
 from math import sin, cos, floor, pi
 #from PyQt6.QtWebChannel import QWebChannel
+from textwrap import wrap
 from tqdm import tqdm
+
 
 PRINT_CLASS_NAMES = True
 
@@ -50,7 +52,7 @@ class GraphicDrawing:
         if PRINT_CLASS_NAMES:
             print("\nFound following class names: ")
         for class_name, class_attributes in self.classes.items():
-            class_attributes["width"] = max(max(self.larger_string_size_list(class_attributes["attrs"]) * self.FONTSIZE*0.5, len(class_name)* self.FONTSIZETITLE), self.BOX_WIDTH_DEFAULT)
+            class_attributes["width"] = max(max(self.larger_string_size_list(class_attributes["attrs"]) * self.FONTSIZE*0.7, len(class_name)* self.FONTSIZETITLE), self.BOX_WIDTH_DEFAULT)
             class_attributes["height"] = max(self.BOX_HEIGHT_DEFAULT +len(class_attributes["attrs"]) * self.FONTSIZE,self.BOX_HEIGHT_DEFAULT)
             class_attributes["angle"] = count*(360//self.sides)
             count+=1
@@ -285,8 +287,20 @@ class Controller:
         
         return result
 
-    @staticmethod
-    def convert_tables_to_JSON(content, type):
+    # @staticmethod
+    # def wrap_label(text, max_chars_per_line=40):
+    #     lines = text.split('\n')  # preserva quebras de linha existentes
+    #     wrapped_lines = []
+
+    #     for line in lines:
+    #         if len(line) > max_chars_per_line:
+    #             wrapped_lines.extend(wrap(line, width=max_chars_per_line))
+    #         else:
+    #             wrapped_lines.append(line)
+
+    #     return '\n'.join(wrapped_lines)
+
+    def convert_tables_to_JSON(self, content, type):
         ENTER = '\n'
         content_lines = content.split(ENTER)
         classes = dict()
@@ -299,7 +313,7 @@ class Controller:
                 reading = True
                 first = True
                 name = line.replace(type, "").replace("{","").strip()
-            
+                
             if '}' in line:
                 classe['attrs'] = attrs
                 classes[name] = classe
@@ -335,7 +349,7 @@ class Controller:
         classes = {
             "FUNC_BENEFICIO_CAD": {
                 "attrs": [
-                    "Cod_Beneficiosadkjhfgsdjhfgsdjhgfsjhdfgsjdhgfjshdgfshdgfjgsdjhfsdgfjhsgdjfgsdgfasdihasgdyhsgdhajsgdjhasgdjhasgdjashgjdhasgdm: Int",
+                    "Cod_Beneficio Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
                     "Descricao_beneficio: String",
                     "Valor_Beneficio: Decimal",
                     "Cod_Beneficio: Int",
@@ -391,17 +405,17 @@ class Controller:
                 content = controller.get_scope_type(content, self.type)
                 classes = controller.convert_tables_to_JSON(content, self.type)
                 relationships = controller.identify_relationships(classes)
-                choice = input("Do you want to limit the scope of the classes? (y/n): ")
+                choice2 = input("Do you want to limit the scope of the classes? (y/n): ")
                 
-                if choice.lower() == 'y':
+                if choice2.lower() == 'y':
                     quantity = 'error'
                     while not quantity.isdigit() or len(quantity) == 0:
                         quantity = input("Define a integer limit quantity: ")
                     if len(quantity) != 0:
                         quantity = int(quantity)
-                        choice = input("Would you like to enter the sides quantity (y/n): ")
+                        choice3 = input("Would you like to enter the sides quantity (y/n): ")
                         sides_quantity = 'error'
-                        if choice.lower() == 'y':
+                        if choice3.lower() == 'y':
                             while not sides_quantity.isdigit() or sides_quantity == '':
                                 sides_quantity = input("Enter the sides quantity: ")
                             
@@ -411,9 +425,9 @@ class Controller:
                         else:
                             drawing = GraphicDrawing(classes, relationships, sides = 4, limit_classes = quantity)
                 else:
-                    choice = input("Would you like to enter the sides quantity (y/n): ")
+                    choice4 = input("Would you like to enter the sides quantity (y/n): ")
                     sides_quantity = 'error'
-                    if choice.lower() == 'y':
+                    if choice4.lower() == 'y':
                         while not sides_quantity.isdigit():
                             sides_quantity = input("Enter the sides quantity: ")
                         sides_quantity = int(sides_quantity)
@@ -488,15 +502,15 @@ if __name__ == "__main__":
                 'style': {
                     'border-width': 1,
                     'color': '#003366',
-                    'text-justification': 'left',
+                    'font-family' : 'monospace',
                     'label': 'data(label)',
-                    'padding': '5px',
+                    'padding': '0px',
                     'shape': 'roundrectangle',
                     'text-halign': 'center',
+                    'text-justification': 'left',
                     'text-valign': 'center',
                     'text-wrap': 'wrap',
-                    'z-index': 1,
-                    'font-family' : 'monospace'
+                    'z-index': 1
                 }
         },
         {
@@ -513,23 +527,27 @@ if __name__ == "__main__":
         {
             'selector': '.highlight',
             'style': {
+                'background-opacity': 1,
+                'border-opacity': 0,
+                'color': '#000000',
+                'events': 'no',
+                'font-family': 'monospace',
+                'font-size': 'data(fontSize)',
+                'font-weight': 'bold',
+                'height': '1',
                 'label': 'data(label)',
+                #'padding': '5px',
+                'shape': 'roundrectangle',
                 'text-background-color': '#ffff00',
                 'text-background-opacity': 1,
-                'color': '#000000',
-                'font-weight': 'bold',
-                'text-valign': 'center',
-                'text-halign': 'center',
-                'background-opacity': 0,
-                'border-opacity': 0,
-                'font-size': drawing.FONTSIZE,
-                'z-index': 9999,
-                'events': 'no',
-                'text-wrap': 'wrap',
-                'text-margin-y': 0,
-                'text-margin-x': 0,
-                'border-width': 0,
-                'font-family' : 'monospace'
+                'text-halign': 'right',
+                #'text-justification': 'left',
+                #'text-margin-y': 0,
+                #'text-margin-x': 0,
+                'text-valign': 'bottom',
+                'text-wrap': 'none',
+                'width': '1',
+                'z-index': 9999
             }
         }]
         
@@ -561,12 +579,14 @@ if __name__ == "__main__":
         
         dash_app.layout = html.Div([
             html.Div(id="debug-output", style={"position": "fixed", "top": "10px", "left": "200px", "background": "#eee", "padding": "5px", "zIndex": 9999}),
+            html.Div(id="mouse-coords", style={"position": "fixed", "bottom": "10px", "right": "10px", "background": "#fff", "color": "#000", "padding": "4px 8px", "font-size": "12px", "font-family": "monospace", "z-index": 9999}),
             html.Button("Restaurar visualização", id="btn-reset-view", n_clicks=0),
             dcc.Interval(id="key-event-poller", interval=500, n_intervals=0),
             dcc.Store(id="key-event-store", data={}),
             dcc.Store(id="camera-state", data={"pan": {'x': center_x, 'y': center_y}, "zoom": 1}),
             dcc.Store(id="dummy-store", data={"results": [], "currentIndex": 0}),
             dcc.Store(id="search-results-store", data={"results": [], "currentIndex": 0}),
+            dcc.Interval(id='interval', interval=1000, n_intervals=0),
             html.Button(
                 [
                     DashIconify(icon="mdi:magnify", width=20, height=20),
@@ -602,6 +622,15 @@ if __name__ == "__main__":
                     {'label': 'Palavra aproximada', 'value': 'aproximada'}
                 ],
                 value='exata',
+                labelStyle={'display': 'inline-block', 'marginRight': '15px'}
+            ),
+            dcc.RadioItems(
+                id='radio-scope',
+                options=[
+                    {'label': 'Pesquisar tudo', 'value': 'all'},
+                    {'label': 'Pesquisar somente titulos', 'value': 'only_titles'}
+                ],
+                value='all',
                 labelStyle={'display': 'inline-block', 'marginRight': '15px'}
             )
             ], style={
@@ -646,6 +675,7 @@ if __name__ == "__main__":
             Input('search-input', 'n_submit'),
             Input('key-event-store', 'data'),
             State('radio-options', 'value'),
+            State('radio-scope', 'value'),
             State('search-input', 'value'),
             State('search-results-store', 'data'),
             prevent_initial_call=True
@@ -656,6 +686,13 @@ if __name__ == "__main__":
             Output("key-event-store", "data"),
             Input("key-event-poller", "n_intervals"),
         )
+
+        dash_app.clientside_callback(
+            ClientsideFunction(namespace='clientside', function_name='trackMousePosition'),
+            Output('mouse-coords', 'children'),
+            Input('interval', 'n_intervals')
+        )
+
 
         Thread(target=controller.run_server, daemon=True).start()
         qt_app = QApplication(sys.argv)
