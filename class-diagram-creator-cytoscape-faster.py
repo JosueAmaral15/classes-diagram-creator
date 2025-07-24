@@ -579,7 +579,7 @@ if __name__ == "__main__":
         
         dash_app.layout = html.Div([
             html.Div(id="debug-output", style={"position": "fixed", "top": "10px", "left": "200px", "background": "#eee", "padding": "5px", "zIndex": 9999}),
-            html.Div(id="mouse-coords", style={"position": "fixed", "bottom": "10px", "right": "10px", "background": "#fff", "color": "#000", "padding": "4px 8px", "font-size": "12px", "font-family": "monospace", "z-index": 9999}),
+            html.Div(id="mouse-coords", style={"position": "fixed", "bottom": "10px", "right": "10px", "background": "#fff", "color": "#000", "padding": "4px 8px", "font-size": "12px", "font-family": "monospace", "z-index": 10000}),
             html.Button("Restaurar visualização", id="btn-reset-view", n_clicks=0),
             dcc.Interval(id="key-event-poller", interval=500, n_intervals=0),
             dcc.Store(id="key-event-store", data={}),

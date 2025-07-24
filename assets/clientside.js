@@ -76,34 +76,18 @@ function highlightTextStandalone(node, searchTerm, search_type) {
 
     const highlights = [];
 
-    if (!search_type) {
-        lines.forEach((line, lineIndex) => {
-            const regex = new RegExp(searchTerm, 'gi');
-            let match;
-            while ((match = regex.exec(line)) !== null) {
-                const columnIndex = match.index;
-                const centerLine = Math.floor(lines.length / 2);
-                const max_column = Math.max(...lines.map(l => l.length));
-                const centerColumn = max_column / 2;
-                const firstPositionX = (nodeWidth -max_column*4.805)/2;
-                const firstPositionY = (nodeHeight -total_lines*8.4375) /2; // Verificar se realmente está certo
-                const offsetX = columnIndex * charWidth*0.6;
-                const offsetY = lineIndex  * lineHeight*1.05;
-                const resultX = baseX -nodeWidth/2 +firstPositionX +offsetX;
-                const resultY = baseY -nodeHeight/2 +firstPositionY +offsetY;
-                //debugLog(`columnIndex: ${columnIndex}, charWidth: ${charWidth}, lineIndex: ${lineIndex}, lineHeight: ${lineHeight}, centerLine: ${centerLine}, max_column: ${max_column}, centerColumn: ${centerColumn}, firstPositionX: ${firstPositionX}, firstPositionY: ${firstPositionY}, offsetX: ${offsetX}, offsetY: ${offsetY}, resultX: ${resultX}, resultY: ${resultY}.`);
-                highlights.push({
-                    id: `highlight_${node.id()}_${highlights.length}`,
-                    text: match[0],
-                    x: resultX,
-                    y: resultY
-                });
-            }
-        });
-    } else {
+    lines.forEach((line, lineIndex) => {
         const regex = new RegExp(searchTerm, 'gi');
         let match;
-        while ((match = regex.exec(lines[0])) !== null) {
+        
+        //debugLog(`DEBUG 83 before: search_type: ${search_type}, lineIndex: ${lineIndex}`);
+        if (!search_type && lineIndex != 0) {
+            return;
+        }
+
+        //debugLog(`DEBUG 83 after: search_type: ${search_type}, lineIndex: ${lineIndex}`);
+        
+        while ((match = regex.exec(line)) !== null) {
             const columnIndex = match.index;
             const centerLine = Math.floor(lines.length / 2);
             const max_column = Math.max(...lines.map(l => l.length));
@@ -122,7 +106,7 @@ function highlightTextStandalone(node, searchTerm, search_type) {
                 y: resultY
             });
         }
-    }
+    });
 
     cy.getElementById(groupId).data('highlight_elements_quantity', highlights.length);
 
@@ -183,7 +167,7 @@ function resetNodeStyle(node) {
 function debugLog(msg) {
     const el = document.getElementById('debug-output');
     if (el) {
-        el.innerText = msg;
+        el.innerText += msg + '\n';
     }
 }
 
