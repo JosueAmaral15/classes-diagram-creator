@@ -192,42 +192,20 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
     clientside: {
         restoreInitialView: function(n_clicks) {
             const cy = window.dash_clientside.cytoscapeInstances?.diagram;
-            if (!cy) {
-                //debugLog("⚠️ Cytoscape ainda não está pronto");
-                return window.dash_clientside.no_update;
-            }
+            if (!cy) return window.dash_clientside.no_update;
 
-            // Zoom padrão
-            cy.zoom(1);
-
-            // Pan padrão: baseado no centro do grafo (assumido como o node invisível "anchor")
-            const anchor = cy.getElementById("anchor");
-            if (!anchor || anchor.empty()) {
-                //debugLog("⚠️ Anchor não encontrado. Centralizando por fit().");
-                cy.fit();
-                return window.dash_clientside.no_update;
-            }
-
-            // Calcula o deslocamento do anchor até o centro da tela
-            const rendered = anchor.renderedPosition();
-            const viewport = cy.container().getBoundingClientRect();
-
-            const deltaX = rendered.x - viewport.width / 2;
-            const deltaY = rendered.y - viewport.height / 2;
-
-            const currentPan = cy.pan();
-            const adjustedPan = {
-                x: currentPan.x - deltaX,
-                y: currentPan.y - deltaY
-            };
-
-            cy.pan(adjustedPan);
-            clearTextHighlights(cy);
-            cy.nodes().forEach(element => {
-                resetNodeStyle(element); // estilo padrão
+            // Restaura a visão para mostrar todos os elementos
+            cy.animate({
+                fit: { eles: cy.elements(), padding: 50 }, // padding controla margem
+                duration: 500
             });
 
-            //debugLog("✅ View restaurada com zoom=1 e pan recalibrado:", adjustedPan);
+            clearTextHighlights(cy);
+
+            cy.nodes().forEach(element => {
+                resetNodeStyle(element); // volta ao estilo padrão
+            });
+
             return window.dash_clientside.no_update;
         },
         pollKeyEvent: function(n_intervals) {
@@ -260,7 +238,12 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
 
                 cy.nodes().forEach(ele => {
                     const label = (ele.data('label') || '').toLowerCase();
-                    const match = matchType === 'exata' ? label === term : label.includes(term);
+                    if (matchType === 'exata') {
+                        const regex = new RegExp(`\\b${term}\\b`, "i");
+                        match = regex.test(label);
+                    } else {
+                        match = label.includes(term);
+                    }
                     //const lines = label.split('\n');
                     //const match_scope = search_type === 'all'? true : lines[0].includes(term);
                     //debugLog(`match_scope: ${match_scope}, match: ${match}, label: ${label}, term: ${term}, lines: ${lines[0]}, search_type: ${search_type}, label: ${label}`);
