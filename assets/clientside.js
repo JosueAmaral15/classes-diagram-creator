@@ -50,6 +50,16 @@ function wrapLabel(text, maxCharsPerLine = 40) {
     .join('\n');
 }
 
+function focusOnNode(node) {
+    if (node && !node.empty()) {
+        cy.animate({
+            center: { eles: node },
+            zoom: 1.5, // ou outro nível de zoom desejado
+            duration: 500
+        });
+    }
+}
+
 function highlightTextStandalone(node, searchTerm, search_type) {
     const label = node.data('label');
     const lines = label.split('\n');
@@ -314,15 +324,31 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
 (function waitForCytoscapeInstance() {
     const cyElement = document.getElementById('diagram');
     if (cyElement && cyElement._cyreg && typeof cyElement._cyreg.cy === "object") {
-        //debugLog("✅ window.dash_clientside.cytoscapeInstances.diagram registrado com sucesso");
         window.dash_clientside = window.dash_clientside || {};
         window.dash_clientside.clientside = window.dash_clientside.clientside || {};
         window.dash_clientside.cytoscapeInstances = window.dash_clientside.cytoscapeInstances || {};
         window.dash_clientside.cytoscapeInstances.diagram = cyElement._cyreg.cy;
+        
+        const cy = cyElement._cyreg.cy;
 
-        //debugLog('✅ Cytoscape instância registrada manualmente via polling');
+        // === Adicione este trecho ===
+        cy.edges().on('tap', function (evt) {
+            const edge = evt.target;
+            const sourceNode = cy.getElementById(edge.data('source'));
+            const targetNode = cy.getElementById(edge.data('target'));
+
+            // Alternar foco entre source e target
+            if (!edge.data('toggle')) {
+                focusOnNode(targetNode);
+                edge.data('toggle', true);
+            } else {
+                focusOnNode(sourceNode);
+                edge.data('toggle', false);
+            }
+        });
+        // ============================
+
     } else {
-        //debugLog('? cy não está pronto ainda (aguardando...)');
-        setTimeout(waitForCytoscapeInstance, 250); // tenta de novo em 250ms
+        setTimeout(waitForCytoscapeInstance, 250);
     }
 })();

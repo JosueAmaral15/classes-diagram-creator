@@ -232,6 +232,7 @@ class GraphicDrawing:
                 #print(f"line 263, child: {child}, parent: {parent}")
                 self.elements.append({
                     'data': {
+                        'id': f"{child}_{parent}",  # ID único para a aresta
                         'source': child,
                         'target': parent,
                         'label': "0..* ➝ 1",
