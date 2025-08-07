@@ -138,6 +138,8 @@ function highlightTextStandalone(node, searchTerm, search_type) {
 
         highlightNode.move({ parent: groupId });
     });
+
+    return highlights.length != 0;
 }
 
 function clearTextHighlights() {
@@ -177,7 +179,7 @@ function resetNodeStyle(node) {
 function debugLog(msg) {
     const el = document.getElementById('debug-output');
     if (el) {
-        el.innerText += msg + '\n';
+        el.innerText = msg + '\n';
     }
 }
 
@@ -216,7 +218,7 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
             return { key: key, timestamp: Date.now() };
         },
         highlightAndNavigate: function (n_clicks, n_submit, keyEventStore, matchType, search_type, searchText, prevStore) {
-            
+            let message = "";
             const cy = window.dash_clientside.cytoscapeInstances?.diagram;
             if (!cy) return window.dash_clientside.no_update;
             
@@ -249,21 +251,25 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
                     //debugLog(`match_scope: ${match_scope}, match: ${match}, label: ${label}, term: ${term}, lines: ${lines[0]}, search_type: ${search_type}, label: ${label}`);
                     //const finalMatch = match && match_scope;
                     if (match) {
-                        highlightTextStandalone(ele, term, search_type === 'all'); // muda apenas o texto com <span>
-                        highlightNode(ele); // aplica estilo visual
-                        results.push(ele.id());
+                        let have_items = highlightTextStandalone(ele, term, search_type === 'all'); // muda apenas o texto com <span>
+                        if (have_items) {
+                            highlightNode(ele); // aplica estilo visual
+                            results.push(ele.id());
+                        } else {
+                            resetNodeStyle(ele); // estilo padrão
+                        }
                     } else {
                         resetNodeStyle(ele); // estilo padrão
                     }
                 });
-
+                message+= `Search results: ${results.length} nodes.`;
                 if (results.length > 0) {
                     //currentIndex = (currentIndex + 1) % results.length;
                     if (keyEvent === "PageUp") {
                             currentIndex = (currentIndex - 1 + results.length) % results.length;
-                        } else {
-                            currentIndex = (currentIndex + 1) % results.length;
-                        }
+                    } else {
+                        currentIndex = (currentIndex + 1) % results.length;
+                    }
                     const node = cy.getElementById(results[currentIndex]);
                     if (node && !node.empty()) {
                         const subElementNode = cy.getElementById('highlight_' + node.id() + '_' + 0);
@@ -274,12 +280,16 @@ window.dash_clientside = Object.assign({}, window.dash_clientside, {
                 } else {
                     currentIndex = 0;
                 }
+
+                message+= ` Current index: ${currentIndex}.`;
+
             } else if (["Escape"].includes(keyEvent)) {
                 clearTextHighlights(cy);
                 cy.nodes().forEach(element => {
                     resetNodeStyle(element); // estilo padrão
                 });
             }
+            debugLog(message);
             return { results, currentIndex };
         },
         trackMousePosition: function () {
